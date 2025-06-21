@@ -102,6 +102,9 @@ dependencies {
     implementation("androidx.navigation:navigation-compose:2.7.7") // Oder die neueste Version
     implementation("androidx.compose.material3:material3:1.2.1") // Sicherstellen, dass Material 3 aktuell ist
     implementation("io.coil-kt:coil-compose:2.6.0")
+
+    //Kotlin reflektion
+    implementation("org.jetbrains.kotlin:kotlin-reflect")
 }
 
 kotlin {
