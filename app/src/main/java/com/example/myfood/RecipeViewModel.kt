@@ -3,24 +3,21 @@ package com.example.myfood.ui.recipe
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-// import androidx.compose.ui.geometry.isEmpty // Entfernt, da nicht verwendet
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.myfood.FoodItem // Sicherstellen, dass der Import korrekt ist
-import com.example.myfood.data.recipe.RecipeApiService
-import com.example.myfood.data.recipe.RecipeDetail // Deine RecipeDetail-Klasse aus RecipeData.kt
-import com.example.myfood.data.recipe.RecipeSummary // Deine RecipeSummary-Klasse aus RecipeData.kt
+import com.example.myfood.FoodItem
+import com.example.myfood.data.recipe.RecipeApiService // Stellt sicher, dass ApiService hier referenziert wird
+import com.example.myfood.data.recipe.RecipeDetail
+import com.example.myfood.data.recipe.RecipeSummary
+// Importiere deine Ingredient-Klasse, wenn sie separat definiert ist (falls nicht Teil von RecipeDetail)
+// import com.example.myfood.data.recipe.Ingredient // Nur wenn Ingredient eine Top-Level-Klasse ist
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.launch
-// kotlin.text.*-Importe sind oft nicht nötig, wenn sie direkt verwendet werden, aber schaden auch nicht.
-// import kotlin.text.any // Standard-Kotlin, expliziter Import oft nicht nötig
-// import kotlin.text.contains // Standard-Kotlin
-// import kotlin.text.lowercase // Standard-Kotlin
-// import kotlin.text.mapNotNull // Standard-Kotlin
+import kotlinx.coroutines.withContext
 
-// UI State sealed interfaces (RecipeListUiState, RecipeDetailUiState)
+// UI State sealed interfaces
 sealed interface RecipeListUiState {
     object Loading : RecipeListUiState
     data class Success(val recipes: List<RecipeSummary>) : RecipeListUiState
@@ -33,7 +30,21 @@ sealed interface RecipeDetailUiState {
     data class Error(val message: String) : RecipeDetailUiState
 }
 
-class RecipeViewModel : ViewModel() {
+data class RecipeWithScore(
+    val summary: RecipeSummary,
+    val detail: RecipeDetail,
+    val score: Int,
+    val matchCount: Int,
+    val missingCount: Int,
+    val matchedPantryIngredients: List<String>,
+    val missingRecipeIngredients: List<String>
+)
+
+class RecipeViewModel(
+    // Es ist gute Praxis, Abhängigkeiten über den Konstruktor zu injizieren.
+    // Für dieses Beispiel wird eine Standardinstanz des Objekts RecipeApiService verwendet.
+    private val recipeApiService: RecipeApiService = RecipeApiService
+) : ViewModel() {
 
     var recipeListUiState: RecipeListUiState by mutableStateOf(RecipeListUiState.Loading)
         private set
@@ -43,54 +54,128 @@ class RecipeViewModel : ViewModel() {
         private set
 
     init {
-        loadRandomRecipes() // Lade initiale "populäre" Rezepte
+        loadRandomRecipes(translateToGerman = true) // Du kannst steuern, ob die initialen Rezepte übersetzt werden sollen
         println("DEBUG_VM: RecipeViewModel initialized.")
     }
 
-    fun loadRandomRecipes() {
-        println("DEBUG_VM: loadRandomRecipes called")
+    fun loadRandomRecipes(translateToGerman: Boolean = false) {
+        println("DEBUG_VM: loadRandomRecipes called, translateToGerman: $translateToGerman")
         viewModelScope.launch {
             recipeListUiState = RecipeListUiState.Loading
-            val result = RecipeApiService.getRandomRecipes()
+            // recipeApiService.getRandomRecipes erwartet keinen 'translateToGerman' Parameter.
+            // Die Übersetzung erfolgt nach dem Abruf, falls gewünscht.
+            val result = recipeApiService.getRandomRecipes() // Holt immer die (wahrscheinlich englischen) Originale
+
             recipeListUiState = result.fold(
-                onSuccess = {
-                    println("DEBUG_VM: loadRandomRecipes success, count: ${it.size}")
-                    RecipeListUiState.Success(it)
+                onSuccess = { originalRecipeSummaries ->
+                    if (translateToGerman) {
+                        println("DEBUG_VM: loadRandomRecipes - Attempting to translate ${originalRecipeSummaries.size} summaries to German.")
+                        val translatedSummaries = withContext(Dispatchers.IO) {
+                            originalRecipeSummaries.map { summary ->
+                                summary.copy(
+                                    // Annahme: RecipeSummary hat ein 'title' Feld, das übersetzt werden kann.
+                                    // Dein RecipeApiService.translateText kann hier verwendet werden.
+                                    title = recipeApiService.translateText(summary.title, sourceLang = "en", targetLang = "de")
+                                    // Ggf. andere Felder im Summary übersetzen, falls vorhanden und nötig
+                                )
+                            }
+                        }
+                        println("DEBUG_VM: loadRandomRecipes success (translated), count: ${translatedSummaries.size}")
+                        RecipeListUiState.Success(translatedSummaries)
+                    } else {
+                        println("DEBUG_VM: loadRandomRecipes success (original), count: ${originalRecipeSummaries.size}")
+                        RecipeListUiState.Success(originalRecipeSummaries)
+                    }
                 },
                 onFailure = {
                     println("DEBUG_VM_ERROR: loadRandomRecipes failed: ${it.message}")
-                    RecipeListUiState.Error(it.message ?: "Unbekannter Fehler beim Laden zufälliger Rezepte")
+                    RecipeListUiState.Error(it.message ?: "Unknown error loading random recipes")
                 }
             )
         }
     }
 
-    fun loadRecipeDetails(recipeId: String) {
-        println("DEBUG_VM: loadRecipeDetails called for ID: $recipeId")
+    fun loadRecipeDetails(recipeId: String, translateToGerman: Boolean = true) {
+        println("DEBUG_VM: loadRecipeDetails called for ID: $recipeId, Translate: $translateToGerman")
         viewModelScope.launch {
             recipeDetailUiState = RecipeDetailUiState.Loading
-            val result = RecipeApiService.getRecipeDetails(recipeId)
+            val result = recipeApiService.getRecipeDetails(recipeId) // Holt das ursprüngliche Detail
+
             recipeDetailUiState = result.fold(
-                onSuccess = {
-                    println("DEBUG_VM: loadRecipeDetails success for ID: $recipeId, Title: ${it.title}")
-                    RecipeDetailUiState.Success(it)
+                onSuccess = { originalRecipeDetail ->
+                    if (translateToGerman) {
+                        println("DEBUG_VM: loadRecipeDetails - Attempting to translate recipe '${originalRecipeDetail.title}' to German.")
+                        val translatedRecipeDetail = translateRecipeDetailForDisplay(originalRecipeDetail)
+                        println("DEBUG_VM: loadRecipeDetails success (translated) for ID: $recipeId, Title: ${translatedRecipeDetail.title}")
+                        RecipeDetailUiState.Success(translatedRecipeDetail)
+                    } else {
+                        println("DEBUG_VM: loadRecipeDetails success (original) for ID: $recipeId, Title: ${originalRecipeDetail.title}")
+                        RecipeDetailUiState.Success(originalRecipeDetail)
+                    }
                 },
                 onFailure = {
                     println("DEBUG_VM_ERROR: loadRecipeDetails failed for ID $recipeId: ${it.message}")
-                    RecipeDetailUiState.Error(it.message ?: "Unbekannter Fehler beim Laden der Rezeptdetails")
+                    RecipeDetailUiState.Error(it.message ?: "Unknown error loading recipe details")
                 }
             )
+        }
+    }
+
+    private suspend fun translateRecipeDetailForDisplay(recipeDetail: RecipeDetail): RecipeDetail {
+        return withContext(Dispatchers.IO) {
+            try {
+                // Annahme: RecipeDetail hat 'title' und 'instructions'
+                val translatedTitle = recipeApiService.translateText(recipeDetail.title, sourceLang = "en", targetLang = "de")
+                val translatedInstructions = recipeApiService.translateText(recipeDetail.instructions, sourceLang = "en", targetLang = "de")
+
+                // Annahme: RecipeDetail hat 'category' und 'area' als nullable Strings
+                val translatedCategory = recipeDetail.category?.let { recipeApiService.translateText(it, sourceLang = "en", targetLang = "de") }
+                val translatedArea = recipeDetail.area?.let { recipeApiService.translateText(it, sourceLang = "en", targetLang = "de") }
+
+                // Annahme: RecipeDetail.extendedIngredients ist List<Ingredient>
+                // und Ingredient hat 'name' und 'originalName: String?'
+                val translatedIngredients = recipeDetail.extendedIngredients.map { ingredient ->
+                    // Wir übersetzen 'ingredient.name', falls es noch nicht übersetzt ist, oder den 'originalName', falls vorhanden.
+                    // Die Logik hier geht davon aus, dass 'originalName' die EN Version ist und 'name' die anzuzeigende Version.
+                    // Wenn 'name' bereits DE ist (durch toRecipeDetail), ist das ok.
+                    // Wenn 'name' EN ist und 'originalName' nicht existiert, wird 'name' als Quelle für die Übersetzung genommen.
+                    val nameToTranslate = ingredient.originalName ?: ingredient.name
+                    ingredient.copy(
+                        name = recipeApiService.translateIngredient(
+                            ingredientName = nameToTranslate,
+                            sourceLang = "en", // Explizit, da originalName als EN angenommen wird
+                            targetLang = "de",
+                            useLibreTranslateAsFallback = true
+                        )
+                        // Ggf. auch die Mengenangaben übersetzen, falls 'ingredient.measure' Text enthält, der übersetzt werden soll.
+                        // measure = recipeApiService.translateText(ingredient.measure, sourceLang = "en", targetLang = "de")
+                    )
+                }
+
+                recipeDetail.copy(
+                    title = translatedTitle,
+                    instructions = translatedInstructions,
+                    category = translatedCategory,
+                    area = translatedArea,
+                    extendedIngredients = translatedIngredients,
+                    // originalTitle wird gesetzt, wenn eine Übersetzung stattgefunden hat
+                    originalTitle = if (recipeDetail.title != translatedTitle) recipeDetail.title else recipeDetail.originalTitle
+                )
+            } catch (e: Exception) {
+                println("DEBUG_VM_ERROR: Failed to translate recipe detail contents for '${recipeDetail.title}': ${e.message}")
+                recipeDetail // Im Fehlerfall das Original zurückgeben
+            }
         }
     }
 
     fun loadSuggestedRecipes(
         pantryItems: List<FoodItem>,
         maxInitialRecipesToConsider: Int = 20,
-        maxDetailCalls: Int = 10
+        maxDetailCalls: Int = 10,
+        numberOfSuggestionsToReturn: Int = 5
     ) {
-        println("DEBUG_VM: loadSuggestedRecipes called. Pantry size: ${pantryItems.size}")
+        println("DEBUG_VM: loadSuggestedRecipes. Pantry: ${pantryItems.size}, MaxSummaries: $maxInitialRecipesToConsider, MaxDetailCalls: $maxDetailCalls, SuggestionsToReturn: $numberOfSuggestionsToReturn")
         if (pantryItems.isEmpty()) {
-            println("DEBUG_VM: loadSuggestedRecipes - Pantry is empty, returning empty suggestions.")
             suggestedRecipesUiState = RecipeListUiState.Success(emptyList())
             return
         }
@@ -98,141 +183,120 @@ class RecipeViewModel : ViewModel() {
         viewModelScope.launch {
             suggestedRecipesUiState = RecipeListUiState.Loading
 
-            // 1. Hole deutsche Zutatennamen aus dem Vorrat
             val germanPantryIngredientNames = pantryItems.mapNotNull {
-                it.name?.lowercase()?.trim()?.takeIf { name -> name.isNotBlank() }
+                it.name?.lowercase()?.trim()?.takeIf(String::isNotBlank)
             }.distinct()
-            println("DEBUG_VM: loadSuggestedRecipes - GERMAN PANTRY NAMES: $germanPantryIngredientNames")
-
+            println("DEBUG_VM: GERMAN PANTRY NAMES: $germanPantryIngredientNames")
             if (germanPantryIngredientNames.isEmpty()) {
-                println("DEBUG_VM: loadSuggestedRecipes - No German pantry names to process.")
                 suggestedRecipesUiState = RecipeListUiState.Success(emptyList())
                 return@launch
             }
 
-            // 2. Übersetze die deutschen Namen ins Englische (asynchron und parallel)
-            //    unter Verwendung der neuen Kaskaden-Logik im RecipeApiService
-            val pantryIngredientNamesForApiDeferred = germanPantryIngredientNames.map { germanName ->
-                async(Dispatchers.IO) { // Wichtig: Netzwerk/CPU-intensive Aufgaben auf IO-Dispatcher
-                    RecipeApiService.translateIngredient(
+            val pantryIngredientsENDeferred = germanPantryIngredientNames.map { germanName ->
+                async(Dispatchers.IO) {
+                    recipeApiService.translateIngredient(
                         ingredientName = germanName,
-                        useLibreTranslateAsFallback = true, // Hier entscheiden, ob LibreTranslate als 2. API-Fallback genutzt wird
-                        myMemoryEmail = null // Optional: "deine.email@example.com" für MyMemory
+                        sourceLang = "de", targetLang = "en",
+                        useLibreTranslateAsFallback = true
                     )
                 }
             }
-            val pantryIngredientNamesForApi = pantryIngredientNamesForApiDeferred.awaitAll()
-                .filter { it.isNotBlank() } // Entferne leere Strings
-                .distinct() // Stelle sicher, dass jede Zutat nur einmal vorkommt
-            println("DEBUG_VM: loadSuggestedRecipes - TRANSLATED PANTRY NAMES FOR API (via translateIngredient): $pantryIngredientNamesForApi")
-
-            if (pantryIngredientNamesForApi.isEmpty()) {
-                println("DEBUG_VM: loadSuggestedRecipes - Translated pantry ingredients for API are empty.")
+            val pantryIngredientsEN = pantryIngredientsENDeferred.awaitAll()
+                .filter(String::isNotBlank).distinct()
+            println("DEBUG_VM: TRANSLATED PANTRY NAMES FOR API (EN): $pantryIngredientsEN")
+            if (pantryIngredientsEN.isEmpty()) {
                 suggestedRecipesUiState = RecipeListUiState.Success(emptyList())
                 return@launch
             }
 
-            // 3. Hole initiale Rezept-Summaries von TheMealDB mit den übersetzten englischen Namen
-            val initialRecipeSummariesResult = RecipeApiService.findRecipesContainingAnyOfIngredients(
-                ingredientNames = pantryIngredientNamesForApi,
-                maxIngredientsToQuery = 3, // Wie viele der Top-Vorratszutaten für die Suche verwenden
-                maxResultsPerIngredient = 7  // Wie viele Rezepte pro Zutat von TheMealDB holen
+            val initialRecipeSummariesResult = recipeApiService.findRecipesContainingAnyOfIngredients(
+                ingredientNames = pantryIngredientsEN,
+                maxIngredientsToQuery = 3.coerceAtMost(pantryIngredientsEN.size),
+                maxResultsPerIngredient = (maxInitialRecipesToConsider / pantryIngredientsEN.size.coerceAtLeast(1) + 1).coerceAtLeast(5)
             )
 
             initialRecipeSummariesResult.fold(
                 onSuccess = { recipeSummaries ->
-                    println("DEBUG_VM: loadSuggestedRecipes - INITIAL RECIPE SUMMARIES from TheMealDB (count: ${recipeSummaries.size}): ${recipeSummaries.map { it.title }}")
+                    println("DEBUG_VM: INITIAL SUMMARIES from TheMealDB (count: ${recipeSummaries.size}): ${recipeSummaries.map { it.title }}")
                     if (recipeSummaries.isEmpty()) {
                         suggestedRecipesUiState = RecipeListUiState.Success(emptyList())
                         return@fold
                     }
 
-                    // 4. Wähle eine Untermenge für Detailabfragen aus und hole Details (asynchron)
                     val recipesToGetDetailsFor = recipeSummaries.shuffled().take(maxInitialRecipesToConsider.coerceAtMost(maxDetailCalls))
-                    println("DEBUG_VM: loadSuggestedRecipes - Recipes to get details for (count: ${recipesToGetDetailsFor.size}): ${recipesToGetDetailsFor.map { it.title }}")
-
-                    if (recipesToGetDetailsFor.isEmpty()){
+                    if (recipesToGetDetailsFor.isEmpty()) {
                         suggestedRecipesUiState = RecipeListUiState.Success(emptyList())
                         return@fold
                     }
 
-                    val recipesWithDetailsDeferred = recipesToGetDetailsFor.map { summary ->
-                        async(Dispatchers.IO) { // Netzwerkaufruf auf IO-Dispatcher
-                            RecipeApiService.getRecipeDetails(summary.id).fold(
+                    val recipeDetailsDeferred = recipesToGetDetailsFor.map { summary ->
+                        async(Dispatchers.IO) {
+                            recipeApiService.getRecipeDetails(summary.id).fold(
                                 onSuccess = { detail -> Pair(summary, detail) },
                                 onFailure = {
-                                    println("DEBUG_VM_ERROR: loadSuggestedRecipes - Failed to get details for ${summary.title}: ${it.message}")
-                                    null // Erlaube null, um fehlerhafte Aufrufe zu überspringen
+                                    println("DEBUG_VM_ERROR: Failed to get details for ${summary.title}: ${it.message}")
+                                    null
                                 }
                             )
                         }
                     }
-                    val detailedRecipesPairs = recipesWithDetailsDeferred.awaitAll().filterNotNull()
-                    println("DEBUG_VM: loadSuggestedRecipes - DETAILED RECIPE PAIRS (count: ${detailedRecipesPairs.size}): ${detailedRecipesPairs.map { it.first.title }}")
-
-                    if (detailedRecipesPairs.isEmpty()) {
-                        println("DEBUG_VM: loadSuggestedRecipes - No details could be fetched. Fallback to initial summaries if any (count: ${recipesToGetDetailsFor.size})")
-                        suggestedRecipesUiState = if (recipesToGetDetailsFor.isNotEmpty()) RecipeListUiState.Success(recipesToGetDetailsFor) else RecipeListUiState.Success(emptyList())
+                    val fetchedRecipePairs = recipeDetailsDeferred.awaitAll().filterNotNull()
+                    if (fetchedRecipePairs.isEmpty()) {
+                        suggestedRecipesUiState = RecipeListUiState.Success(emptyList()) // Oder Fallback auf Summaries
                         return@fold
                     }
 
-                    // 5. Zähle Übereinstimmungen und sortiere (Englisch vs. Englisch)
-                    val sortedRecipeSummaries = detailedRecipesPairs.mapNotNull { (summary, detail) ->
-                        // Wichtig: countMatchingIngredients vergleicht die englischen Rezeptdetails
-                        // mit den ins Englische übersetzten Vorratsnamen (pantryIngredientNamesForApi)
-                        val matchCount = countMatchingIngredients(detail, pantryIngredientNamesForApi)
+                    val scoredRecipes = fetchedRecipePairs.mapNotNull { (summary, detail) ->
+                        // Für das Scoring: Vergleiche pantryIngredientsEN mit den ENGLISCHEN Namen der Rezeptzutaten.
+                        // Annahme: `ingredient.originalName` ist der englische Name, oder `ingredient.name` falls `originalName` null ist
+                        // und `ingredient.name` noch nicht übersetzt wurde (was unwahrscheinlich ist, wenn `toRecipeDetail` übersetzt).
+                        // Es ist entscheidend, dass die Namen hier auf derselben Sprache (Englisch) für den Vergleich sind.
+                        val recipeIngredientsEN = detail.extendedIngredients.mapNotNull { ingredient ->
+                            (ingredient.originalName ?: ingredient.name) // Bevorzuge originalName für EN
+                                .lowercase().trim().takeIf(String::isNotBlank)
+                        }.distinct()
+
+                        if (recipeIngredientsEN.isEmpty()) {
+                            println("DEBUG_VM_SCORING: Recipe '${detail.title}' has no processable EN ingredients for scoring (originalName or name).")
+                            return@mapNotNull null
+                        }
+
+                        var matchCount = 0
+                        val matchedPantryIngs = mutableListOf<String>()
+                        pantryIngredientsEN.forEach { pantryIngEN ->
+                            if (recipeIngredientsEN.any { recipeIngEN ->
+                                    recipeIngEN == pantryIngEN || recipeIngEN.contains(pantryIngEN) || pantryIngEN.contains(recipeIngEN)
+                                }) {
+                                matchCount++
+                                matchedPantryIngs.add(pantryIngEN)
+                            }
+                        }
+
+                        val missingRecipeIngs = recipeIngredientsEN.filterNot { recipeIngEN ->
+                            pantryIngredientsEN.any { pantryIngEN ->
+                                recipeIngEN == pantryIngEN || recipeIngEN.contains(pantryIngEN) || pantryIngEN.contains(recipeIngEN)
+                            }
+                        }
+                        val missingCount = missingRecipeIngs.size
+
                         if (matchCount > 0) {
-                            println("DEBUG_VM: loadSuggestedRecipes - Recipe: ${summary.title}, MatchCount: $matchCount")
-                            Triple(summary, detail, matchCount) // Behalte summary, detail und matchCount für die Sortierung
+                            val score = (matchCount * 10) - (missingCount * 1)
+                            RecipeWithScore(summary, detail, score, matchCount, missingCount, matchedPantryIngs.distinct(), missingRecipeIngs)
                         } else {
-                            println("DEBUG_VM: loadSuggestedRecipes - Recipe: ${summary.title}, MatchCount: 0, SKIPPING")
-                            null // Entferne Rezepte ohne Übereinstimmung
+                            null
                         }
                     }
-                        .sortedByDescending { it.third } // Sortiere nach Anzahl der Übereinstimmungen
-                        .map { it.first } // Nimm nur die RecipeSummary für die UI
+                        .sortedByDescending { it.score }
+                        .take(numberOfSuggestionsToReturn)
 
-                    println("DEBUG_VM: loadSuggestedRecipes - SORTED SUGGESTED RECIPES (count: ${sortedRecipeSummaries.size}): ${sortedRecipeSummaries.map { it.title }}")
-                    suggestedRecipesUiState = RecipeListUiState.Success(sortedRecipeSummaries)
+                    println("DEBUG_VM: TOP SCORED RECIPES (count: ${scoredRecipes.size}): ${scoredRecipes.map { it.summary.title }}")
+                    suggestedRecipesUiState = RecipeListUiState.Success(scoredRecipes.map { it.summary })
                 },
                 onFailure = {
-                    println("DEBUG_VM_ERROR: loadSuggestedRecipes - Failed in initialRecipeSummariesResult (TheMealDB): ${it.message}")
-                    suggestedRecipesUiState = RecipeListUiState.Error(it.message ?: "Fehler beim Laden der Rezeptvorschläge")
+                    println("DEBUG_VM_ERROR: Failed in initialRecipeSummariesResult (TheMealDB): ${it.message}")
+                    suggestedRecipesUiState = RecipeListUiState.Error(it.message ?: "Error loading suggested recipes")
                 }
             )
         }
-    }
-
-    /**
-     * Vergleicht die (englischen) Zutaten eines Rezepts mit den (ins Englische übersetzten) Vorratszutaten.
-     */
-    private fun countMatchingIngredients(recipeDetail: RecipeDetail, translatedPantryIngredientsEN: List<String>): Int {
-        if (translatedPantryIngredientsEN.isEmpty()) return 0
-
-        // Extrahiere und normalisiere die englischen Zutatennamen aus dem Rezeptdetail
-        // Korrektur: Verwende extendedIngredients gemäß deiner RecipeDetail-Definition
-        val recipeIngredientsEN = recipeDetail.extendedIngredients.mapNotNull {
-            it.name.lowercase().trim().takeIf { name -> name.isNotBlank() }
-        }.distinct()
-
-        if (recipeIngredientsEN.isEmpty()) {
-            println("DEBUG_VM_MATCHING: Recipe '${recipeDetail.title}' has no processable ingredients from details (extendedIngredients was empty or all names were blank).")
-            return 0
-        }
-
-        println("DEBUG_VM_MATCHING for Recipe '${recipeDetail.title}': Recipe Ingredients (EN from Detail's extendedIngredients): $recipeIngredientsEN, TRANSLATED Pantry Ingredients (EN): $translatedPantryIngredientsEN")
-
-        var matchCount = 0
-        for (pantryIngEN in translatedPantryIngredientsEN) { // Bereits übersetzte englische Vorratszutat
-            if (recipeIngredientsEN.any { recipeIngEN ->    // Englische Zutat aus dem Rezeptdetail
-                    recipeIngEN == pantryIngEN ||
-                            recipeIngEN.contains(pantryIngEN) || // z.B. "chicken breast" (Rezept) enthält "chicken" (Vorrat)
-                            pantryIngEN.contains(recipeIngEN)    // z.B. "chicken" (Vorrat) ist in "chicken breast" (Rezept)
-                }) {
-                matchCount++
-            }
-        }
-        println("DEBUG_VM_MATCHING for Recipe '${recipeDetail.title}': MATCH COUNT FOUND: $matchCount")
-        return matchCount
     }
 }

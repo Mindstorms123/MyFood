@@ -1,149 +1,146 @@
-// In RecipeData.kt (oder wie auch immer deine Datei heißt)
-package com.example.myfood.data.recipe // Stelle sicher, dass das Package stimmt
+// In RecipeData.kt
+package com.example.myfood.data.recipe
 
-import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
-// Wrapper für die API-Antwort, da TheMealDB Rezepte in einem "meals" Array liefert
+// Wrapper
 @Serializable
 data class MealDBResponse(
-    val meals: List<MealDBRecipe>? // Kann null sein, wenn nichts gefunden wird
+    val meals: List<MealDBRecipe>?
 )
 
+// API-spezifische Datenklasse
 @Serializable
 data class MealDBRecipe(
-    val idMeal: String, // Eindeutige ID
-    val strMeal: String, // Rezeptname
+    val idMeal: String,
+    val strMeal: String,
     val strCategory: String? = null,
-    val strArea: String? = null, // Region
+    val strArea: String? = null,
     val strInstructions: String? = null,
-    val strMealThumb: String? = null, // URL zum Bild
+    val strMealThumb: String? = null,
     val strTags: String? = null,
-    val strYoutube: String? = null, // YouTube Link
-
-    // Zutaten und Mengenangaben (TheMealDB hat bis zu 20 davon)
-    // Wir fassen sie später in eine Liste von Ingredients zusammen
+    val strYoutube: String? = null,
     val strIngredient1: String? = null,
     val strIngredient2: String? = null,
     // ... bis strIngredient20
     val strIngredient20: String? = null,
-
     val strMeasure1: String? = null,
     val strMeasure2: String? = null,
     // ... bis strMeasure20
     val strMeasure20: String? = null,
-
-    val strSource: String? = null, // URL zur Originalquelle
+    val strSource: String? = null,
     val dateModified: String? = null
 ) {
-    // Hilfsfunktion, um Zutaten und Maße in eine handlichere Liste umzuwandeln
     fun getIngredients(): List<IngredientPresentation> {
         val ingredients = mutableListOf<IngredientPresentation>()
         for (i in 1..20) {
             val ingredient = getPropertyValue("strIngredient$i")?.toString()
             val measure = getPropertyValue("strMeasure$i")?.toString()
-
             if (!ingredient.isNullOrBlank()) {
                 ingredients.add(IngredientPresentation(ingredient, measure ?: ""))
             } else {
-                // Sobald eine Zutat leer ist, hören wir auf, da sie sequenziell sind
                 break
             }
         }
         return ingredients
     }
 
-    // Kleine Hilfsfunktion, um dynamisch auf Properties zuzugreifen (vereinfacht)
     private fun getPropertyValue(propertyName: String): Any? {
         return this::class.members.find { it.name == propertyName }?.call(this)
     }
 }
 
-// Eine einfachere Klasse für die Darstellung von Zutaten in der UI
+// Hilfsklasse für geparste Zutaten von der API
 data class IngredientPresentation(
-    val name: String,
+    val name: String, // Der reine Name der Zutat von der API
     val measure: String
 )
 
-// Wir mappen MealDBRecipe auf unsere generischen UI-Datenklassen
-// Das macht die UI unabhängiger von der spezifischen API-Struktur
+// --- Unsere generischen UI-Datenklassen ---
+
+@Serializable
+data class RecipeSummary(
+    val id: String,
+    val title: String,
+    val imageUrl: String?,
+    val sourceName: String? = null
+    // optional: val originalTitle: String? = null // Falls du auch hier das Original speichern willst
+)
+
+@Serializable
+data class RecipeDetail(
+    val id: String,
+    val title: String, // Wird übersetzt
+    val imageUrl: String?,
+    val sourceName: String?, // Wird potenziell übersetzt
+    val instructions: String, // Wird übersetzt
+    val extendedIngredients: List<Ingredient>, // Enthält übersetzte und originale Namen
+    val summary: String?, // Wird potenziell übersetzt (oder aus category/area generiert)
+    val category: String?, // Hinzugefügt, wird potenziell übersetzt
+    val area: String?,     // Hinzugefügt, wird potenziell übersetzt
+    val originalTitle: String? = null, // Hinzugefügt, speichert den nicht-übersetzten Titel
+    val originalSourceName: String? = null, // Optional: um das Original zu speichern
+    val originalCategory: String? = null, // Optional: um das Original zu speichern
+    val originalArea: String? = null,     // Optional: um das Original zu speichern
+    val originalSummary: String? = null   // Optional: um das Original zu speichern
+
+    // val readyInMinutes: Int? = null, // TheMealDB liefert dies nicht direkt
+    // val servings: Int? = null      // TheMealDB liefert dies nicht direkt
+)
+
+@Serializable
+data class Ingredient(
+    val id: Int, // Dummy-ID für TheMealDB
+    val original: String,      // Die komplette "original" Angabe von der API, z.B. "1 cup flour"
+    val name: String,          // Der *angezeigte* Name der Zutat (kann übersetzt sein)
+    val originalName: String,  // Der *reine, ursprüngliche* Name der Zutat von der API (z.B. "flour")
+    val amount: Double,
+    val unit: String
+)
+
+// --- Mapping Funktionen ---
 
 fun MealDBRecipe.toRecipeSummary(): RecipeSummary {
     return RecipeSummary(
         id = this.idMeal,
-        title = this.strMeal,
+        title = this.strMeal, // Wird im ViewModel übersetzt, falls nötig
         imageUrl = this.strMealThumb,
-        sourceName = this.strArea // oder strCategory, je nachdem was du anzeigen willst
+        sourceName = this.strArea // oder strCategory, wird ggf. im VM übersetzt
     )
 }
 
 fun MealDBRecipe.toRecipeDetail(): RecipeDetail {
+    val ingredientsList = this.getIngredients().map { presentation ->
+        Ingredient(
+            id = 0, // TheMealDB gibt keine separaten Zutat-IDs
+            original = "${presentation.measure} ${presentation.name}".trim(), // z.B. "1 cup Flour"
+            name = presentation.name, // Initial der API-Name, z.B. "Flour". Wird im ViewModel übersetzt.
+            originalName = presentation.name, // Der reine API-Name, z.B. "Flour"
+            amount = parseAmount(presentation.measure),
+            unit = parseUnit(presentation.measure)
+        )
+    }
+
     return RecipeDetail(
         id = this.idMeal,
-        title = this.strMeal,
+        title = this.strMeal, // Wird im ViewModel übersetzt
         imageUrl = this.strMealThumb,
-        sourceName = this.strSource ?: this.strArea,
-        instructions = this.strInstructions ?: "Keine Anleitung verfügbar.",
-        extendedIngredients = this.getIngredients().map {
-            // Konvertiere IngredientPresentation zu unserer generischen Ingredient-Klasse,
-            // falls du die Unterscheidung von Name, Menge, Einheit beibehalten willst.
-            // Für TheMealDB ist IngredientPresentation oft ausreichend für die Anzeige.
-            // Hier ein vereinfachtes Mapping zu unserer bestehenden `Ingredient`-Klasse:
-            Ingredient(
-                id = 0, // TheMealDB gibt keine separaten Zutat-IDs
-                original = "${it.measure} ${it.name}".trim(),
-                name = it.name,
-                amount = parseAmount(it.measure), // Einfache Parsing-Logik (kann verbessert werden)
-                unit = parseUnit(it.measure) // Einfache Parsing-Logik
-            )
-        },
-        summary = "Kategorie: ${this.strCategory ?: "N/A"}, Region: ${this.strArea ?: "N/A"}" // Beispiel
+        sourceName = this.strSource ?: this.strArea, // Wird ggf. im VM übersetzt
+        instructions = this.strInstructions ?: "Keine Anleitung verfügbar.", // Wird im VM übersetzt
+        extendedIngredients = ingredientsList,
+        summary = "Kategorie: ${this.strCategory ?: "N/A"}, Region: ${this.strArea ?: "N/A"}", // Wird ggf. im VM übersetzt
+        category = this.strCategory, // Hinzugefügt, wird ggf. im VM übersetzt
+        area = this.strArea,         // Hinzugefügt, wird ggf. im VM übersetzt
+        originalTitle = this.strMeal // Speichere hier schon mal das Original
+        // originalSourceName, originalCategory etc. könnten hier auch direkt befüllt werden
     )
 }
 
-
-// Hilfsfunktionen zum Parsen von Menge und Einheit (sehr rudimentär, kann verbessert werden)
+// Hilfsfunktionen zum Parsen
 private fun parseAmount(measure: String): Double {
-    return measure.split(" ").firstOrNull()?.toDoubleOrNull() ?: 1.0 // Default 1.0 wenn nicht parsbar
+    return measure.split(" ").firstOrNull()?.toDoubleOrNull() ?: 1.0
 }
 
 private fun parseUnit(measure: String): String {
     return measure.split(" ").drop(1).joinToString(" ")
 }
-
-
-// Unsere generischen Datenklassen für die UI (aus dem vorherigen Schritt, leicht angepasst)
-// Diese bleiben größtenteils gleich, damit die UI nicht bei jedem API-Wechsel umgebaut werden muss.
-@Serializable
-data class RecipeSummary( // Für die Listenansicht
-    val id: String,
-    val title: String,
-    val imageUrl: String?,
-    val sourceName: String? = null,
-    // TheMealDB liefert diese nicht direkt für die Übersicht, also optional machen oder entfernen
-    // val readyInMinutes: Int? = null,
-    // val servings: Int? = null
-)
-
-@Serializable
-data class RecipeDetail( // Für die Detailansicht
-    val id: String,
-    val title: String,
-    val imageUrl: String?,
-    val sourceName: String?,
-    val instructions: String,
-    val extendedIngredients: List<Ingredient>, // Unsere generische Zutat
-    // TheMealDB liefert diese nicht direkt, also optional
-    // val readyInMinutes: Int? = null,
-    // val servings: Int? = null,
-    val summary: String? = null
-)
-
-@Serializable
-data class Ingredient( // Unsere generische Zutat für die UI
-    val id: Int,
-    val original: String,
-    val name: String,
-    val amount: Double,
-    val unit: String
-)
