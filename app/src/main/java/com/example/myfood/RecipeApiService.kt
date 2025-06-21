@@ -6,6 +6,7 @@ import com.example.myfood.data.recipe.MealDBResponse // WICHTIG (die Version aus
 import com.example.myfood.data.recipe.RecipeDetail // WICHTIG
 import com.example.myfood.data.recipe.RecipeSummary // WICHTIG
 // Ingredient und IngredientPresentation werden indirekt über die oberen Klassen verwendet
+// und die Mapping-Funktionen toRecipeSummary/toRecipeDetail sind als suspend Erweiterungen in RecipeData.kt
 
 import io.ktor.client.*
 import io.ktor.client.call.*
@@ -15,7 +16,11 @@ import io.ktor.client.request.*
 import io.ktor.http.ContentType
 import io.ktor.http.contentType
 import io.ktor.serialization.kotlinx.json.*
-import kotlinx.serialization.Serializable // Bleibt für lokale Datenklassen wie LibreTranslateResponse
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.withContext
+import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import java.util.concurrent.ConcurrentHashMap
 
@@ -469,8 +474,7 @@ val GERMAN_TO_ENGLISH_INGREDIENT_MAP: Map<String, String> = mapOf(
     "rotkohl mit apfelstücken" to "red cabbage with apple pieces", // Beispiel für komplexere
     "volvic juicy orange mango, 1 l" to "volvic juicy orange mango, 1 l", // Markennamen bleiben oft
     "naturalis classic" to "naturalis classic", // Markennamen bleiben oft
-    "schnitzel" to "cutlet" // nochmal explizit, kann spezifischer als "schnitzel" sein
-    // ... Erweitere diese Liste nach Bedarf
+    "schnitzel" to "cutlet"
 )
 
 // --- Datenklassen für Übersetzungs-APIs (bleiben lokal in dieser Datei) ---
@@ -493,21 +497,6 @@ data class MyMemoryResponse(
     val responseDetails: String? = null
 )
 
-// ----- GELÖSCHT: Die folgenden Datenklassen sind jetzt in RecipeData.kt definiert und werden von dort importiert -----
-// @Serializable
-// data class Meal(...) { ... } // Alte Meal-Klasse komplett entfernt
-//
-// @Serializable
-// data class MealDBResponse(val meals: List<Meal>?) // Alte MealDBResponse-Klasse entfernt
-//
-// data class RecipeSummary(...) // Alte RecipeSummary-Klasse entfernt
-//
-// data class RecipeDetail(...) { // Alte RecipeDetail-Klasse (und ihre innere Ingredient-Klasse) entfernt
-//    data class Ingredient(...)
-// }
-// -------------------------------------------------------------------------------------------------------------
-
-
 object RecipeApiService {
 
     private val client: HttpClient by lazy {
@@ -520,122 +509,197 @@ object RecipeApiService {
                 })
             }
             install(HttpTimeout) {
-                requestTimeoutMillis = 15000
-                connectTimeoutMillis = 10000
-                socketTimeoutMillis = 10000
+                requestTimeoutMillis = 20000 // Erhöht für potenziell mehrere Übersetzungsaufrufe
+                connectTimeoutMillis = 15000
+                socketTimeoutMillis = 15000
             }
         }
     }
 
-    private val translationCache = ConcurrentHashMap<String, String>()
+    private val translationCache = ConcurrentHashMap<String, String>() // Key: "sourceLang-targetLang:text"
     private const val MYMEMORY_API_URL = "https://api.mymemory.translated.net/get"
+    private const val LIBRETRANSLATE_API_URL = "https://translate.argosopentech.com/translate" // Oder deine eigene Instanz
 
+    /**
+     * Übersetzt einen einzelnen Zutatennamen.
+     * Nutzt zuerst die lokale Map, dann den Cache, dann MyMemory und optional LibreTranslate als Fallback.
+     */
     suspend fun translateIngredient(
         ingredientName: String,
-        sourceLang: String = "de",
-        targetLang: String = "en",
-        useLibreTranslateAsFallback: Boolean = false,
-        myMemoryEmail: String? = null
+        sourceLang: String = "de", // Typischerweise "de" für Nutzereingaben oder "en" von der API
+        targetLang: String = "en", // Typischerweise "en" für die API-Abfrage oder "de" für die Anzeige
+        useLibreTranslateAsFallback: Boolean = true, // Standardmäßig true für Zutaten
+        myMemoryEmail: String? = null // Optional für MyMemory
     ): String {
         val normalizedOriginal = ingredientName.lowercase().trim()
-        if (normalizedOriginal.isEmpty()) return ""
+        if (normalizedOriginal.isEmpty() || sourceLang == targetLang) return ingredientName
 
-        translationCache[normalizedOriginal]?.let {
-            println("DEBUG_API_TRANSLATE_MAIN: Cache HIT for '$normalizedOriginal' -> '$it'")
+        val cacheKey = "$sourceLang-$targetLang:$normalizedOriginal"
+        translationCache[cacheKey]?.let {
+            println("DEBUG_API_TRANSLATE_INGREDIENT: Cache HIT for '$cacheKey' -> '$it'")
             return it
         }
-        println("DEBUG_API_TRANSLATE_MAIN: Cache MISS for '$normalizedOriginal'.")
+        println("DEBUG_API_TRANSLATE_INGREDIENT: Cache MISS for '$cacheKey'.")
 
-        GERMAN_TO_ENGLISH_INGREDIENT_MAP[normalizedOriginal]?.let { localTranslation ->
-            if (localTranslation != normalizedOriginal) {
-                println("DEBUG_API_TRANSLATE_MAIN: Local Map HIT for '$normalizedOriginal' -> '$localTranslation'")
-                translationCache[normalizedOriginal] = localTranslation
-                return localTranslation
-            }
+        // Spezifisch für DE -> EN Zutaten kann die lokale Map sehr effektiv sein
+        if (sourceLang == "de" && targetLang == "en") {
+            GERMAN_TO_ENGLISH_INGREDIENT_MAP[normalizedOriginal]?.let { localTranslation ->
+                // Wenn die lokale Übersetzung identisch zum Original ist (z.B. bei Markennamen),
+                // dann trotzdem die Online-Übersetzung versuchen, falls es doch eine bessere gibt.
+                if (localTranslation != normalizedOriginal) {
+                    println("DEBUG_API_TRANSLATE_INGREDIENT: Local Map HIT for '$normalizedOriginal' -> '$localTranslation'")
+                    translationCache[cacheKey] = localTranslation
+                    return localTranslation
+                } else {
+                    println("DEBUG_API_TRANSLATE_INGREDIENT: Local Map HIT for '$normalizedOriginal' but translation is same as original. Proceeding to online translation.")
+                }
+            } ?: println("DEBUG_API_TRANSLATE_INGREDIENT: Local Map MISS for DE->EN '$normalizedOriginal'.")
         }
-        println("DEBUG_API_TRANSLATE_MAIN: Local Map MISS for '$normalizedOriginal'.")
 
-        var translatedName = translateIngredientViaMyMemoryInternal(normalizedOriginal, sourceLang, targetLang, myMemoryEmail)
+        var translatedName = translateViaMyMemory(normalizedOriginal, sourceLang, targetLang, myMemoryEmail)
 
         if (translatedName == normalizedOriginal && useLibreTranslateAsFallback) {
-            println("DEBUG_API_TRANSLATE_MAIN: MyMemory returned original. Attempting LibreTranslate...")
-            translatedName = translateIngredientViaLibreTranslateInternal(normalizedOriginal, sourceLang, targetLang)
+            println("DEBUG_API_TRANSLATE_INGREDIENT: MyMemory returned original or failed for '$normalizedOriginal'. Attempting LibreTranslate...")
+            translatedName = translateViaLibreTranslate(normalizedOriginal, sourceLang, targetLang)
         }
 
-        if (translatedName != normalizedOriginal && translatedName.isNotBlank()) {
-            println("DEBUG_API_TRANSLATE_MAIN: Final translation for '$normalizedOriginal' -> '$translatedName'. Caching.")
-            translationCache[normalizedOriginal] = translatedName
-        } else if (translatedName == normalizedOriginal) {
-            println("DEBUG_API_TRANSLATE_MAIN: All translation attempts failed or returned original for '$normalizedOriginal'. Using original.")
+        if (translatedName.isNotBlank() && translatedName != normalizedOriginal) { // Nur cachen, wenn eine echte Übersetzung stattgefunden hat
+            println("DEBUG_API_TRANSLATE_INGREDIENT: Final translation for '$normalizedOriginal' ($sourceLang->$targetLang) -> '$translatedName'. Caching.")
+            translationCache[cacheKey] = translatedName
+        } else {
+            println("DEBUG_API_TRANSLATE_INGREDIENT: All translation attempts failed or returned original for '$normalizedOriginal'. Using original.")
+            // Cache das Original, wenn alle Versuche fehlschlagen, um wiederholte API-Aufrufe zu vermeiden,
+            // es sei denn, es ist ein leerer String.
+            if (normalizedOriginal.isNotBlank()){
+                translationCache[cacheKey] = normalizedOriginal
+            }
         }
-        return translatedName
+        return translatedName.ifBlank { normalizedOriginal } // Stelle sicher, dass nicht leer zurückgegeben wird
     }
 
-    private suspend fun translateIngredientViaMyMemoryInternal(
-        normalizedOriginal: String, sourceLang: String, targetLang: String, email: String?
+    /**
+     * Übersetzt einen längeren Text (z.B. Titel, Anleitung, Beschreibung).
+     * Nutzt Cache, dann LibreTranslate und optional MyMemory als Fallback.
+     */
+    suspend fun translateText(
+        textToTranslate: String,
+        sourceLang: String = "en", // Oft Englisch von der API
+        targetLang: String = "de", // Oft Deutsch für die Anzeige
+        myMemoryEmail: String? = null
     ): String {
-        println("DEBUG_API_TRANSLATE_MYMEMORY_INTERNAL: Calling MyMemory for '$normalizedOriginal'...")
+        val trimmedText = textToTranslate.trim()
+        if (trimmedText.isBlank() || sourceLang == targetLang) {
+            return textToTranslate
+        }
+
+        val cacheKey = "$sourceLang-$targetLang:${trimmedText.hashCode()}"
+        translationCache[cacheKey]?.let {
+            println("DEBUG_API_TRANSLATE_TEXT: Cache HIT for text hash '$cacheKey' -> '${it.take(50)}...'")
+            return it
+        }
+        println("DEBUG_API_TRANSLATE_TEXT: Cache MISS for text hash '$cacheKey'. Text: '${trimmedText.take(50)}...'")
+
+        var translatedText = translateViaLibreTranslate(trimmedText, sourceLang, targetLang)
+
+        if (translatedText == trimmedText) { // Wenn LibreTranslate fehlschlug oder das Original lieferte
+            println("DEBUG_API_TRANSLATE_TEXT: LibreTranslate returned original or failed for text. Attempting MyMemory...")
+            translatedText = translateViaMyMemory(trimmedText, sourceLang, targetLang, myMemoryEmail)
+        }
+
+        if (translatedText.isNotBlank() && translatedText != trimmedText) {
+            println("DEBUG_API_TRANSLATE_TEXT: Final translation for text hash '$cacheKey' -> '${translatedText.take(50)}...'. Caching.")
+            translationCache[cacheKey] = translatedText
+        } else {
+            println("DEBUG_API_TRANSLATE_TEXT: All translation attempts failed or returned original. Using original. Caching original.")
+            translationCache[cacheKey] = trimmedText // Cache das Original, um wiederholte API-Aufrufe zu vermeiden
+        }
+        return translatedText.ifBlank { trimmedText }
+    }
+
+    private suspend fun translateViaMyMemory(
+        text: String, sourceLang: String, targetLang: String, email: String?
+    ): String {
+        println("DEBUG_API_TRANSLATE_MYMEMORY: Calling MyMemory for '$text' ($sourceLang->$targetLang)...")
         return try {
             val response: MyMemoryResponse = client.get(MYMEMORY_API_URL) {
-                parameter("q", normalizedOriginal)
+                parameter("q", text)
                 parameter("langpair", "$sourceLang|$targetLang")
                 email?.let { parameter("de", it) }
             }.body()
+
             if (response.responseStatus == 200 && response.responseData != null && response.responseData.translatedText.isNotBlank()) {
                 val translated = response.responseData.translatedText.lowercase().trim()
-                if (response.responseData.match < 0.5 && translated == normalizedOriginal) {
-                    normalizedOriginal
+                // MyMemory kann manchmal das Original mit hohem Match zurückgeben, wenn es keine gute Übersetzung hat
+                // oder wenn der Text sehr kurz ist und in beiden Sprachen gleich ist.
+                // Ein niedriger Match-Wert (< 0.7 oder 0.5) bei gleichzeitiger Rückgabe des Originals deutet eher auf eine Unsicherheit hin.
+                if (response.responseData.match < 0.7 && translated == text) {
+                    println("DEBUG_API_TRANSLATE_MYMEMORY: Low match (${response.responseData.match}) and original returned for '$text'. Returning original.")
+                    text
                 } else {
-                    println("DEBUG_API_TRANSLATE_MYMEMORY_INTERNAL: Success: '$normalizedOriginal' -> '$translated'")
+                    println("DEBUG_API_TRANSLATE_MYMEMORY: Success: '$text' -> '$translated' (Match: ${response.responseData.match})")
                     translated
                 }
             } else {
-                println("DEBUG_API_TRANSLATE_MYMEMORY_INTERNAL_ERROR: Failed for '$normalizedOriginal'. Status: ${response.responseStatus}")
-                normalizedOriginal
+                println("DEBUG_API_TRANSLATE_MYMEMORY_ERROR: Failed for '$text'. Status: ${response.responseStatus}, Details: ${response.responseDetails}")
+                text // Fallback zum Originaltext
             }
         } catch (e: Exception) {
-            println("DEBUG_API_TRANSLATE_MYMEMORY_INTERNAL_EXCEPTION: for '$normalizedOriginal': ${e.message}")
-            normalizedOriginal
+            println("DEBUG_API_TRANSLATE_MYMEMORY_EXCEPTION: for '$text': ${e.message}")
+            text // Fallback zum Originaltext
         }
     }
 
-    private suspend fun translateIngredientViaLibreTranslateInternal(
-        normalizedOriginal: String, sourceLang: String, targetLang: String
+    private suspend fun translateViaLibreTranslate(
+        text: String, sourceLang: String, targetLang: String
     ): String {
-        val libreTranslateApiUrl = "https://translate.argosopentech.com/translate"
-        println("DEBUG_API_TRANSLATE_LIBRE_INTERNAL: Calling LibreTranslate for '$normalizedOriginal'...")
+        println("DEBUG_API_TRANSLATE_LIBRE: Calling LibreTranslate for '${text.take(50)}...' ($sourceLang->$targetLang)...")
         return try {
-            val response: LibreTranslateResponse = client.post(libreTranslateApiUrl) {
+            val requestBody = mapOf("q" to text, "source" to sourceLang, "target" to targetLang, "format" to "text")
+            val response: LibreTranslateResponse = client.post(LIBRETRANSLATE_API_URL) {
                 contentType(ContentType.Application.Json)
-                setBody(mapOf("q" to normalizedOriginal, "source" to sourceLang, "target" to targetLang, "format" to "text"))
+                setBody(requestBody)
             }.body()
+
             if (response.translatedText != null && response.translatedText.isNotBlank()) {
-                val translated = response.translatedText.lowercase().trim()
-                println("DEBUG_API_TRANSLATE_LIBRE_INTERNAL: Success: '$normalizedOriginal' -> '$translated'")
+                val translated = if (text.length > 20) response.translatedText.trim() else response.translatedText.lowercase().trim() // Für längere Texte nicht unbedingt lowercase
+                println("DEBUG_API_TRANSLATE_LIBRE: Success for '${text.take(50)}...' -> '${translated.take(50)}...'")
                 translated
             } else {
-                println("DEBUG_API_TRANSLATE_LIBRE_INTERNAL_ERROR: Failed for '$normalizedOriginal'. API Error: ${response.error}")
-                normalizedOriginal
+                println("DEBUG_API_TRANSLATE_LIBRE_ERROR: Failed for '${text.take(50)}...'. API Error: ${response.error}")
+                text // Fallback zum Originaltext
             }
         } catch (e: Exception) {
-            println("DEBUG_API_TRANSLATE_LIBRE_INTERNAL_EXCEPTION: for '$normalizedOriginal': ${e.message}")
-            normalizedOriginal
+            println("DEBUG_API_TRANSLATE_LIBRE_EXCEPTION: for '${text.take(50)}...': ${e.message}")
+            text // Fallback zum Originaltext
         }
     }
 
-    suspend fun getRandomRecipes(count: Int = 10): Result<List<RecipeSummary>> {
-        println("DEBUG_API_THEMEALDB: getRandomRecipes called")
+    suspend fun getRandomRecipes(count: Int = 10, targetLang: String = "de"): Result<List<RecipeSummary>> {
+        println("DEBUG_API_THEMEALDB: getRandomRecipes called, targetLang: $targetLang")
         return try {
-            // Verwende MealDBResponse und MealDBRecipe aus RecipeData.kt
-            val response: MealDBResponse = client.get("${BASE_URL_THEMEALDB}filter.php") {
-                parameter("c", "Seafood")
+            val response: MealDBResponse = client.get("${BASE_URL_THEMEALDB}search.php") { // search.php?s= (leer) gibt zufällige
+                parameter("s", "") // Leerer String für zufällige Auswahl (oft besser als 10x random.php)
             }.body()
+            // Alternative: Mehrfach random.php aufrufen, falls search.php?s= nicht gewünschtes liefert
+            // val mealDBRecipes = mutableListOf<MealDBRecipe>()
+            // if (response.meals == null && count > 0) { // Fallback, falls search.php?s= nichts liefert
+            //     repeat(count) {
+            //         try {
+            //             val randomMealResponse: MealDBResponse = client.get("${BASE_URL_THEMEALDB}random.php").body()
+            //             randomMealResponse.meals?.firstOrNull()?.let { mealDBRecipes.add(it) }
+            //         } catch (e: Exception) { /* ignore single random failures */ }
+            //     }
+            // } else {
+            //     response.meals?.let { mealDBRecipes.addAll(it) }
+            // }
+
             println("DEBUG_API_THEMEALDB: getRandomRecipes response meals count: ${response.meals?.size ?: 0}")
 
-            // .toRecipeSummary() ist jetzt eine Erweiterungsfunktion auf MealDBRecipe aus RecipeData.kt
             val recipes = response.meals?.take(count)?.mapNotNull { mealDBRecipe ->
-                mealDBRecipe.toRecipeSummary()
+                // Übergib 'this' (RecipeApiService) und targetLang an die Erweiterungsfunktion
+                mealDBRecipe.toRecipeSummary(this, targetLang)
             } ?: emptyList()
+
             Result.success(recipes)
         } catch (e: Exception) {
             println("DEBUG_API_THEMEALDB_ERROR: getRandomRecipes failed: ${e.message}")
@@ -643,18 +707,18 @@ object RecipeApiService {
         }
     }
 
-    suspend fun getRecipeDetails(recipeId: String): Result<RecipeDetail> {
-        println("DEBUG_API_THEMEALDB: getRecipeDetails called for ID: $recipeId")
+
+    suspend fun getRecipeDetails(recipeId: String, targetLang: String = "de"): Result<RecipeDetail> {
+        println("DEBUG_API_THEMEALDB: getRecipeDetails called for ID: $recipeId, targetLang: $targetLang")
         return try {
-            // Verwende MealDBResponse und MealDBRecipe aus RecipeData.kt
             val response: MealDBResponse = client.get("${BASE_URL_THEMEALDB}lookup.php") {
                 parameter("i", recipeId)
             }.body()
-            val mealDBRecipe = response.meals?.firstOrNull() // Ist jetzt vom Typ MealDBRecipe
+            val mealDBRecipe = response.meals?.firstOrNull()
             if (mealDBRecipe != null) {
                 println("DEBUG_API_THEMEALDB: getRecipeDetails success for ID: $recipeId, Title: ${mealDBRecipe.strMeal}")
-                // .toRecipeDetail() ist jetzt eine Erweiterungsfunktion auf MealDBRecipe aus RecipeData.kt
-                Result.success(mealDBRecipe.toRecipeDetail())
+                // Übergib 'this' (RecipeApiService) und targetLang an die Erweiterungsfunktion
+                Result.success(mealDBRecipe.toRecipeDetail(this, targetLang))
             } else {
                 println("DEBUG_API_THEMEALDB_WARN: getRecipeDetails recipe not found for ID: $recipeId")
                 Result.failure(Exception("Rezept nicht gefunden (ID: $recipeId) oder API-Antwort fehlerhaft."))
@@ -666,122 +730,60 @@ object RecipeApiService {
     }
 
     suspend fun findRecipesContainingAnyOfIngredients(
-        ingredientNames: List<String>,
-        maxIngredientsToQuery: Int = 3,
-        maxResultsPerIngredient: Int = 5
+        ingredientNamesDE: List<String>, // Erwartet deutsche Namen für die lokale Übersetzung
+        maxIngredientsToQuery: Int = 1, // Reduziert, um API-Limits und Komplexität zu managen
+        maxResultsPerIngredient: Int = 5,
+        targetLang: String = "de" // Zielsprache für die Ergebnisrezepte
     ): Result<List<RecipeSummary>> {
-        println("DEBUG_API_THEMEALDB: findRecipesContainingAnyOfIngredients called with EN ingredients: $ingredientNames")
-        if (ingredientNames.isEmpty()) {
+        println("DEBUG_API_THEMEALDB: findRecipes... called with DE ingredients: $ingredientNamesDE, targetLang: $targetLang")
+        if (ingredientNamesDE.isEmpty()) {
             return Result.success(emptyList())
         }
 
         val allFoundRecipes = mutableSetOf<RecipeSummary>()
 
-        ingredientNames.take(maxIngredientsToQuery).forEach { ingredientNameEN ->
-            val formattedIngredientName = ingredientNameEN.replace(" ", "_").trim()
-            if (formattedIngredientName.isEmpty()) return@forEach
+        // Übersetze die ersten 'maxIngredientsToQuery' deutschen Zutaten ins Englische
+        val ingredientNamesEN = ingredientNamesDE.take(maxIngredientsToQuery).mapNotNull { deName ->
+            val enName = translateIngredient(deName, sourceLang = "de", targetLang = "en")
+            if (enName != deName && enName.isNotBlank()) enName.replace(" ", "_").trim() else null
+        }.filter { it.isNotBlank() }
 
-            try {
-                println("DEBUG_API_THEMEALDB: Querying filter.php for EN ingredient: '$formattedIngredientName'")
-                // Verwende MealDBResponse und MealDBRecipe aus RecipeData.kt
-                val response: MealDBResponse = client.get("${BASE_URL_THEMEALDB}filter.php") {
-                    parameter("i", formattedIngredientName)
-                }.body()
-                println("DEBUG_API_THEMEALDB: Response for EN '$formattedIngredientName' meals count: ${response.meals?.size ?: 0}")
+        if (ingredientNamesEN.isEmpty()) {
+            println("DEBUG_API_THEMEALDB: findRecipes... - No valid English translations for ingredients found.")
+            return Result.success(emptyList())
+        }
 
-                response.meals?.take(maxResultsPerIngredient)?.forEach { mealDBRecipe ->
-                    // .toRecipeSummary() ist jetzt eine Erweiterungsfunktion auf MealDBRecipe aus RecipeData.kt
-                    allFoundRecipes.add(mealDBRecipe.toRecipeSummary())
+        println("DEBUG_API_THEMEALDB: Querying with EN ingredients: $ingredientNamesEN")
+
+        // TheMealDB's filter.php?i= kann nur eine Zutat auf einmal.
+        // Um nach mehreren zu suchen, müssen wir mehrere Anfragen stellen oder filter.php?c= (Kategorie)
+        // oder search.php?s= (Name) verwenden, wenn die API das unterstützt.
+        // Für "containing ANY OF" ist es am einfachsten, für jede Zutat einzeln zu suchen und die Ergebnisse zu sammeln.
+        withContext(Dispatchers.IO) { // Parallele Ausführung der API-Aufrufe
+            ingredientNamesEN.map { formattedIngredientNameEN ->
+                async {
+                    try {
+                        println("DEBUG_API_THEMEALDB: Querying filter.php for EN ingredient: '$formattedIngredientNameEN'")
+                        val response: MealDBResponse = client.get("${BASE_URL_THEMEALDB}filter.php") {
+                            parameter("i", formattedIngredientNameEN)
+                        }.body()
+                        println("DEBUG_API_THEMEALDB: Response for EN '$formattedIngredientNameEN' meals count: ${response.meals?.size ?: 0}")
+
+                        response.meals?.take(maxResultsPerIngredient)?.mapNotNull { mealDBRecipe ->
+                            // Übersetze die gefundenen Zusammenfassungen in die targetLang
+                            mealDBRecipe.toRecipeSummary(this@RecipeApiService, targetLang)
+                        } ?: emptyList()
+                    } catch (e: Exception) {
+                        println("DEBUG_API_THEMEALDB_ERROR: findRecipes... - Error for EN ingredient '$formattedIngredientNameEN': ${e.message}")
+                        emptyList<RecipeSummary>()
+                    }
                 }
-            } catch (e: Exception) {
-                println("DEBUG_API_THEMEALDB_ERROR: findRecipes... - Error for EN ingredient '$formattedIngredientName': ${e.message}")
+            }.awaitAll().forEach { recipeList ->
+                allFoundRecipes.addAll(recipeList)
             }
         }
+
         println("DEBUG_API_THEMEALDB: findRecipes... - Total unique recipes found: ${allFoundRecipes.size}")
-        return Result.success(allFoundRecipes.toList())
-    }
-
-    suspend fun translateText(
-        textToTranslate: String,
-        sourceLang: String = "en", // Meistens Englisch von der API
-        targetLang: String = "de",
-        myMemoryEmail: String? = null // Für MyMemory, falls du es weiterhin nutzen willst
-    ): String {
-        if (textToTranslate.isBlank() || sourceLang == targetLang) {
-            return textToTranslate
-        }
-
-        val normalizedText = textToTranslate.trim() // Für längere Texte ist lowercase() nicht immer ideal
-
-        // 1. Prüfe den Cache (erwäge einen separaten Cache für längere Texte oder einen mit Größenlimit)
-        translationCache[normalizedText]?.let { // Du könntest den Cache-Key spezifischer machen, z.B. "$sourceLang-$targetLang:$normalizedText"
-            println("DEBUG_API_TRANSLATE_TEXT: Cache HIT for text starting with '${normalizedText.take(30)}...' -> '$it'")
-            return it
-        }
-        println("DEBUG_API_TRANSLATE_TEXT: Cache MISS for text starting with '${normalizedText.take(30)}...'.")
-
-        // 2. MyMemory (kann auch längere Texte, aber beachte API-Limits)
-        //    Es ist fraglich, ob MyMemory für ganze Anleitungen die beste Wahl ist, LibreTranslate könnte besser sein.
-        //    Du könntest hier auch direkt zu LibreTranslate gehen oder die Logik anpassen.
-        var translatedText = try {
-            val response: MyMemoryResponse = client.get(MYMEMORY_API_URL) {
-                parameter("q", normalizedText)
-                parameter("langpair", "$sourceLang|$targetLang")
-                myMemoryEmail?.let { parameter("de", it) }
-                // Beachte, dass MyMemory manchmal HTML-Entitäten zurückgibt, die du dekodieren müsstest.
-            }.body()
-            if (response.responseStatus == 200 && response.responseData != null && response.responseData.translatedText.isNotBlank()) {
-                // Hier könntest du noch prüfen, ob die Übersetzung plausibel ist (nicht das Original, etc.)
-                println("DEBUG_API_TRANSLATE_TEXT_MYMEMORY: Success for text starting with '${normalizedText.take(30)}...'")
-                response.responseData.translatedText // Ggf. .trim()
-            } else {
-                println("DEBUG_API_TRANSLATE_TEXT_MYMEMORY_ERROR: Failed for text. Status: ${response.responseStatus}")
-                normalizedText // Fallback zum Original
-            }
-        } catch (e: Exception) {
-            println("DEBUG_API_TRANSLATE_TEXT_MYMEMORY_EXCEPTION: ${e.message}")
-            normalizedText // Fallback zum Original
-        }
-
-        // 3. LibreTranslate als Fallback oder primäre Wahl für längere Texte
-        if (translatedText == normalizedText) { // Wenn MyMemory fehlschlug oder das Original lieferte
-            println("DEBUG_API_TRANSLATE_TEXT: MyMemory returned original or failed. Attempting LibreTranslate...")
-            translatedText = translateTextViaLibreTranslateInternal(normalizedText, sourceLang, targetLang)
-        }
-
-        // 4. In den Cache legen
-        if (translatedText != normalizedText && translatedText.isNotBlank()) {
-            println("DEBUG_API_TRANSLATE_TEXT: Final translation for text starting with '${normalizedText.take(30)}...' -> '${translatedText.take(30)}...'. Caching.")
-            translationCache[normalizedText] = translatedText // Wieder: Cache-Key überdenken
-        } else if (translatedText == normalizedText) {
-            println("DEBUG_API_TRANSLATE_TEXT: All translation attempts failed or returned original. Using original.")
-        }
-        return translatedText
-    }
-
-    // Die separate LibreTranslate-Funktion für Texte (fast identisch zu der für Zutaten)
-    private suspend fun translateTextViaLibreTranslateInternal(
-        normalizedText: String, sourceLang: String, targetLang: String
-    ): String {
-        val libreTranslateApiUrl = "https://translate.argosopentech.com/translate" // oder eine andere Instanz
-        println("DEBUG_API_TRANSLATE_LIBRE_INTERNAL (TEXT): Calling LibreTranslate for text starting with '${normalizedText.take(30)}...'")
-        return try {
-            val requestBody = mapOf("q" to normalizedText, "source" to sourceLang, "target" to targetLang, "format" to "text")
-            val response: LibreTranslateResponse = client.post(libreTranslateApiUrl) {
-                contentType(ContentType.Application.Json)
-                setBody(requestBody)
-            }.body()
-            if (response.translatedText != null && response.translatedText.isNotBlank()) {
-                val translated = response.translatedText //.trim() ist bei längeren Texten vllt. nicht immer gewollt
-                println("DEBUG_API_TRANSLATE_LIBRE_INTERNAL (TEXT): Success for text starting with '${normalizedText.take(30)}...'")
-                translated
-            } else {
-                println("DEBUG_API_TRANSLATE_LIBRE_INTERNAL_ERROR (TEXT): Failed. API Error: ${response.error}")
-                normalizedText
-            }
-        } catch (e: Exception) {
-            println("DEBUG_API_TRANSLATE_LIBRE_INTERNAL_EXCEPTION (TEXT): ${e.message}")
-            normalizedText
-        }
+        return Result.success(allFoundRecipes.toList().distinctBy { it.id }) // Sicherstellen, dass sie wirklich unique sind
     }
 }

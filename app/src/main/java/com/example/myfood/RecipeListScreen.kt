@@ -1,11 +1,12 @@
 package com.example.myfood.ui.recipe
 
-import androidx.compose.foundation.clickable
+// Importe für Composable-Funktionen und UI-Elemente
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.items // Korrekter Import für items in LazyColumn
 import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect // Für LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
@@ -15,28 +16,46 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
-import com.example.myfood.FoodViewModel
-import com.example.myfood.data.recipe.RecipeSummary
-import com.example.myfood.navigation.Screen
+import com.example.myfood.FoodViewModel // Für pantryItems
+import com.example.myfood.data.recipe.RecipeSummary // Für das Datenmodell der Rezeptkarte
+import com.example.myfood.navigation.Screen // Für die Navigation
+
+// --- WICHTIG: Die folgende Definition von RecipeListUiState MUSS HIER ENTFERNT WERDEN ---
+// Die Definition befindet sich jetzt in RecipeViewModel.kt
+// sealed interface RecipeListUiState {
+//    object Loading : RecipeListUiState
+//    data class Success(val recipes: List<RecipeSummary>) : RecipeListUiState
+//    data class Error(val message: String) : RecipeListUiState
+// }
+// ------------------------------------------------------------------------------------
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun RecipeListScreen(
     navController: NavController,
-    foodViewModel: FoodViewModel,
+    foodViewModel: FoodViewModel, // FoodViewModel liefert die pantryItems
     recipeViewModel: RecipeViewModel = viewModel()
 ) {
+    // Direkter Zugriff auf die States vom RecipeViewModel
     val recipeListState = recipeViewModel.recipeListUiState
     val suggestedRecipesState = recipeViewModel.suggestedRecipesUiState
-    val pantryItems = foodViewModel.foodItems
+    val pantryItems = foodViewModel.foodItems // Angenommen, dies ist die Liste der Vorratsgegenstände
 
-    // Lade Rezeptvorschläge basierend auf Vorratsgegenständen
+    // Lade Vorschläge, wenn sich pantryItems ändert oder beim ersten Mal
     LaunchedEffect(pantryItems) {
-        // Übergebe die tatsächlichen FoodItem-Objekte, falls dein ViewModel das erwartet
-        // oder eine Liste von Strings, falls es nur die Namen braucht.
-        // In unserem aktuellen RecipeViewModel -> loadSuggestedRecipes erwartet es List<FoodItem>
-        recipeViewModel.loadSuggestedRecipes(pantryItems)
+        // Stelle sicher, dass pantryItems den Typ hat, den loadSuggestedRecipes erwartet
+        // (wahrscheinlich List<FoodItem> oder eine abgeleitete Liste von Strings)
+        if (pantryItems.isNotEmpty()) { // Nur laden, wenn Vorrat nicht leer ist
+            recipeViewModel.loadSuggestedRecipes(pantryItems)
+        } else {
+            // Optional: explizit den suggestedRecipesUiState auf Success(emptyList()) setzen,
+            // wenn der Vorrat leer ist, falls das nicht schon in loadSuggestedRecipes passiert.
+            // recipeViewModel.clearSuggestedRecipes() // Beispiel für eine Methode zum Leeren
+        }
     }
+
+    // Die "Random Recipes" (oder wie auch immer du sie nennst) werden im init-Block
+    // des ViewModels geladen. `recipeListUiState` wird dadurch aktualisiert.
 
     Scaffold(
         topBar = {
@@ -48,8 +67,9 @@ fun RecipeListScreen(
                 .padding(paddingValues)
                 .fillMaxSize(),
             contentPadding = PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp) // Etwas mehr Abstand zwischen Karten
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
+            // Abschnitt für vorgeschlagene Rezepte
             item {
                 Text(
                     "Vorschläge für dich",
@@ -57,56 +77,87 @@ fun RecipeListScreen(
                     modifier = Modifier.padding(bottom = 8.dp)
                 )
             }
-            when (val state = suggestedRecipesState) {
+            // Behandlung des suggestedRecipesState
+            val currentSuggestedState = suggestedRecipesState // Für Smart Cast
+            when (currentSuggestedState) {
                 is RecipeListUiState.Loading -> {
-                    item { CircularProgressIndicator(modifier = Modifier.fillMaxWidth().wrapContentWidth(Alignment.CenterHorizontally)) }
+                    item {
+                        Box(modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp), contentAlignment = Alignment.Center) {
+                            CircularProgressIndicator()
+                        }
+                    }
                 }
                 is RecipeListUiState.Success -> {
-                    if (state.recipes.isEmpty()) {
+                    if (currentSuggestedState.recipes.isEmpty()) {
                         item {
                             Text(
-                                if (pantryItems.isEmpty()) "Füge Lebensmittel zu deinem Vorrat hinzu, um Rezeptvorschläge zu erhalten."
-                                else "Keine passenden Rezepte für deinen Vorrat gefunden."
+                                text = if (pantryItems.isEmpty()) "Füge Lebensmittel zu deinem Vorrat hinzu, um Rezeptvorschläge zu erhalten."
+                                else "Keine passenden Rezepte für deinen Vorrat gefunden.",
+                                modifier = Modifier.padding(vertical = 8.dp)
                             )
                         }
                     } else {
-                        items(state.recipes, key = { recipe -> "suggested_${recipe.id}" }) { recipe ->
+                        items(currentSuggestedState.recipes, key = { recipe -> "suggested_${recipe.id}" }) { recipe ->
                             RecipeCard(recipe = recipe, onClick = {
-                                navController.navigate(Screen.RecipeDetail.createRoute(recipe.id.toString()))
+                                navController.navigate(Screen.RecipeDetail.createRoute(recipe.id))
                             })
                         }
                     }
                 }
                 is RecipeListUiState.Error -> {
-                    item { Text("Fehler beim Laden der Vorschläge: ${state.message}") }
+                    item {
+                        Text(
+                            "Fehler beim Laden der Vorschläge: ${currentSuggestedState.message}",
+                            color = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.padding(vertical = 8.dp)
+                        )
+                    }
                 }
             }
 
+            // Trenner und Titel für die andere Rezeptliste (z.B. zufällige/beliebte Rezepte)
             item {
                 Spacer(modifier = Modifier.height(24.dp))
                 Text(
-                    "Beliebte Rezepte",
+                    "Entdecke neue Rezepte", // Titel anpassen
                     style = MaterialTheme.typography.titleLarge,
                     modifier = Modifier.padding(bottom = 8.dp)
                 )
             }
-            when (val state = recipeListState) {
+            // Behandlung des recipeListState (z.B. für zufällige oder beliebte Rezepte)
+            val currentRecipeListState = recipeListState // Für Smart Cast
+            when (currentRecipeListState) {
                 is RecipeListUiState.Loading -> {
-                    item { CircularProgressIndicator(modifier = Modifier.fillMaxWidth().wrapContentWidth(Alignment.CenterHorizontally)) }
+                    item {
+                        Box(modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp), contentAlignment = Alignment.Center) {
+                            CircularProgressIndicator()
+                        }
+                    }
                 }
                 is RecipeListUiState.Success -> {
-                    if (state.recipes.isEmpty()) {
-                        item { Text("Keine beliebten Rezepte gefunden.") }
+                    if (currentRecipeListState.recipes.isEmpty()) {
+                        item {
+                            Text(
+                                "Keine Rezepte zum Entdecken gefunden.",
+                                modifier = Modifier.padding(vertical = 8.dp)
+                            )
+                        }
                     } else {
-                        items(state.recipes, key = { recipe -> "random_${recipe.id}" }) { recipe ->
+                        items(currentRecipeListState.recipes, key = { recipe -> "list_${recipe.id}" }) { recipe ->
                             RecipeCard(recipe = recipe, onClick = {
-                                navController.navigate(Screen.RecipeDetail.createRoute(recipe.id.toString()))
+                                navController.navigate(Screen.RecipeDetail.createRoute(recipe.id))
                             })
                         }
                     }
                 }
                 is RecipeListUiState.Error -> {
-                    item { Text("Fehler: ${state.message}") }
+                    item {
+                        Text(
+                            "Fehler beim Laden der Rezepte: ${currentRecipeListState.message}",
+                            color = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.padding(vertical = 8.dp)
+                        )
+                    }
                 }
             }
         }
@@ -116,7 +167,7 @@ fun RecipeListScreen(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun RecipeCard(
-    recipe: RecipeSummary,
+    recipe: RecipeSummary, // Verwendet RecipeSummary korrekt
     onClick: () -> Unit
 ) {
     Card(
@@ -127,7 +178,7 @@ fun RecipeCard(
         Column {
             AsyncImage(
                 model = ImageRequest.Builder(LocalContext.current)
-                    .data(recipe.imageUrl)
+                    .data(recipe.thumbnailUrl) // Aus RecipeSummary
                     .crossfade(true)
                     // .placeholder(R.drawable.placeholder_image) // Optional
                     // .error(R.drawable.error_image)           // Optional
@@ -139,37 +190,13 @@ fun RecipeCard(
                     .height(180.dp)
             )
             Column(modifier = Modifier.padding(16.dp)) {
-                Text(recipe.title, style = MaterialTheme.typography.titleMedium, maxLines = 2)
-                recipe.sourceName?.let { srcName -> // Expliziter Name für 'it'
-                    Text(
-                        "Quelle: $srcName",
-                        style = MaterialTheme.typography.bodySmall,
-                        modifier = Modifier.padding(top = 4.dp)
-                    )
-                }
-
-                // ANPASSUNG HIER:
-                // Da TheMealDB diese Infos nicht für die Übersicht liefert,
-                // entfernen wir die Row, die readyInMinutes und servings anzeigt.
-                // Alternativ könntest du hier andere Infos aus RecipeSummary anzeigen, falls vorhanden.
-                /*
-                Row(modifier = Modifier.padding(top = 8.dp)) {
-                    recipe.readyInMinutes?.let { minutes -> // Sicherer Aufruf
-                        Text(
-                            "Zeit: $minutes Min.",
-                            style = MaterialTheme.typography.labelSmall,
-                            modifier = Modifier.weight(1f)
-                        )
-                    }
-                    recipe.servings?.let { numServings -> // Sicherer Aufruf
-                        Text(
-                            "Portionen: $numServings",
-                            style = MaterialTheme.typography.labelSmall,
-                            modifier = Modifier.weight(1f)
-                        )
-                    }
-                }
-                */
+                Text(
+                    text = recipe.title, // Titel aus RecipeSummary (sollte bereits übersetzt sein durch ViewModel)
+                    style = MaterialTheme.typography.titleMedium,
+                    maxLines = 2
+                )
+                // Weitere Infos aus RecipeSummary könnten hier angezeigt werden, falls vorhanden und gewünscht.
+                // z.B. recipe.originalTitle, wenn du es anzeigen möchtest.
             }
         }
     }
