@@ -4,6 +4,8 @@ package com.example.myfood.ui.recipe
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items // Korrekter Import für items in LazyColumn
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect // Für LaunchedEffect
@@ -20,14 +22,7 @@ import com.example.myfood.FoodViewModel // Für pantryItems
 import com.example.myfood.data.recipe.RecipeSummary // Für das Datenmodell der Rezeptkarte
 import com.example.myfood.navigation.Screen // Für die Navigation
 
-// --- WICHTIG: Die folgende Definition von RecipeListUiState MUSS HIER ENTFERNT WERDEN ---
-// Die Definition befindet sich jetzt in RecipeViewModel.kt
-// sealed interface RecipeListUiState {
-//    object Loading : RecipeListUiState
-//    data class Success(val recipes: List<RecipeSummary>) : RecipeListUiState
-//    data class Error(val message: String) : RecipeListUiState
-// }
-// ------------------------------------------------------------------------------------
+// Die Definition von RecipeListUiState wird im RecipeViewModel.kt erwartet
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -39,23 +34,20 @@ fun RecipeListScreen(
     // Direkter Zugriff auf die States vom RecipeViewModel
     val recipeListState = recipeViewModel.recipeListUiState
     val suggestedRecipesState = recipeViewModel.suggestedRecipesUiState
-    val pantryItems = foodViewModel.foodItems // Angenommen, dies ist die Liste der Vorratsgegenstände
+    val pantryItems = foodViewModel.foodItems
 
     // Lade Vorschläge, wenn sich pantryItems ändert oder beim ersten Mal
     LaunchedEffect(pantryItems) {
-        // Stelle sicher, dass pantryItems den Typ hat, den loadSuggestedRecipes erwartet
-        // (wahrscheinlich List<FoodItem> oder eine abgeleitete Liste von Strings)
-        if (pantryItems.isNotEmpty()) { // Nur laden, wenn Vorrat nicht leer ist
+        if (pantryItems.isNotEmpty()) {
             recipeViewModel.loadSuggestedRecipes(pantryItems)
         } else {
             // Optional: explizit den suggestedRecipesUiState auf Success(emptyList()) setzen,
-            // wenn der Vorrat leer ist, falls das nicht schon in loadSuggestedRecipes passiert.
-            // recipeViewModel.clearSuggestedRecipes() // Beispiel für eine Methode zum Leeren
+            // wenn der Vorrat leer ist.
+            // recipeViewModel.clearSuggestedRecipes() // Methode im ViewModel erstellen, falls benötigt
         }
     }
 
-    // Die "Random Recipes" (oder wie auch immer du sie nennst) werden im init-Block
-    // des ViewModels geladen. `recipeListUiState` wird dadurch aktualisiert.
+    // Die "Random Recipes" werden initial im ViewModel geladen.
 
     Scaffold(
         topBar = {
@@ -113,17 +105,37 @@ fun RecipeListScreen(
                         )
                     }
                 }
+                // 'else -> {}' ist hier nicht mehr nötig, wenn RecipeListUiState ein sealed interface ist
+                // und alle Fälle abgedeckt sind.
             }
 
             // Trenner und Titel für die andere Rezeptliste (z.B. zufällige/beliebte Rezepte)
             item {
                 Spacer(modifier = Modifier.height(24.dp))
-                Text(
-                    "Entdecke neue Rezepte", // Titel anpassen
-                    style = MaterialTheme.typography.titleLarge,
-                    modifier = Modifier.padding(bottom = 8.dp)
-                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        "Entdecke neue Rezepte",
+                        style = MaterialTheme.typography.titleLarge,
+                    )
+                    IconButton(onClick = {
+                        // Annahme: Dein RecipeViewModel hat eine Methode loadRandomRecipes()
+                        // oder eine ähnlich benannte Methode zum Neuladen dieser Liste.
+                        recipeViewModel.loadRandomRecipes()
+                    }) {
+                        Icon(
+                            imageVector = Icons.Filled.Refresh,
+                            contentDescription = "Neue Rezepte laden"
+                        )
+                    }
+                }
+                // Optional: Ein kleiner Abstand unter dem Titel/Button
+                // Spacer(modifier = Modifier.height(8.dp))
             }
+
             // Behandlung des recipeListState (z.B. für zufällige oder beliebte Rezepte)
             val currentRecipeListState = recipeListState // Für Smart Cast
             when (currentRecipeListState) {
@@ -159,6 +171,7 @@ fun RecipeListScreen(
                         )
                     }
                 }
+                // 'else -> {}' ist hier nicht mehr nötig
             }
         }
     }
@@ -167,7 +180,7 @@ fun RecipeListScreen(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun RecipeCard(
-    recipe: RecipeSummary, // Verwendet RecipeSummary korrekt
+    recipe: RecipeSummary,
     onClick: () -> Unit
 ) {
     Card(
@@ -178,7 +191,7 @@ fun RecipeCard(
         Column {
             AsyncImage(
                 model = ImageRequest.Builder(LocalContext.current)
-                    .data(recipe.thumbnailUrl) // Aus RecipeSummary
+                    .data(recipe.thumbnailUrl)
                     .crossfade(true)
                     // .placeholder(R.drawable.placeholder_image) // Optional
                     // .error(R.drawable.error_image)           // Optional
@@ -191,12 +204,10 @@ fun RecipeCard(
             )
             Column(modifier = Modifier.padding(16.dp)) {
                 Text(
-                    text = recipe.title, // Titel aus RecipeSummary (sollte bereits übersetzt sein durch ViewModel)
+                    text = recipe.title,
                     style = MaterialTheme.typography.titleMedium,
                     maxLines = 2
                 )
-                // Weitere Infos aus RecipeSummary könnten hier angezeigt werden, falls vorhanden und gewünscht.
-                // z.B. recipe.originalTitle, wenn du es anzeigen möchtest.
             }
         }
     }
