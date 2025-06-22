@@ -1,12 +1,45 @@
+
 [versions]
 agp = "8.10.1"
-kotlin = "2.0.21"
+kotlin = "2.0.21" # Dies ist die Kotlin-Version deines Projekts
+# KSP Version muss zu deiner Kotlin-Version passen.
+# Für Kotlin 2.0.21 ist eine passende KSP-Version z.B. "2.0.21-1.0.18" (bitte prüfen!)
+ksp = "2.0.21-1.0.18" # Ersetze dies mit der korrekten KSP-Version für Kotlin 2.0.21
+hilt = "2.51.1"        # Oder die aktuellste Hilt-Version (z.B. 2.51.1)
 coreKtx = "1.16.0"
 junit = "4.13.2"
 junitVersion = "1.2.1"
 espressoCore = "3.6.1"
 appcompat = "1.7.0"
 material = "1.12.0"
+room = "2.6.1"
+hiltNavigationCompose = "1.2.0"
+# Compose
+composeBom = "2024.05.00" # Deine Compose BOM Version
+# Deine Kotlin Compiler Extension Version sollte zu deiner Kotlin Version und Compose BOM passen
+# Für Kotlin 2.0.21 und Compose BOM 2024.05.00, ist die Compose Compiler Version typischerweise 1.5.13 oder höher.
+# Bitte die Compose-Kotlin Kompatibilitätsmatrix prüfen.
+# Beispiel:
+# kotlinCompilerExtension = "1.5.13" # Füge dies hinzu, wenn du es hier zentral verwalten willst
+
+# Kotlinx Serialization
+kotlinxSerializationJson = "1.6.3"
+
+# Ktor
+ktor = "2.3.9" # oder eine aktuellere Version
+
+# CameraX
+camerax = "1.3.3"
+
+# ML Kit
+mlkitBarcodeScanning = "17.2.0"
+
+# Coil
+coil = "2.6.0"
+
+# Navigation Compose
+navigationCompose = "2.7.7"
+
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -16,7 +49,60 @@ androidx-espresso-core = { group = "androidx.test.espresso", name = "espresso-co
 androidx-appcompat = { group = "androidx.appcompat", name = "appcompat", version.ref = "appcompat" }
 material = { group = "com.google.android.material", name = "material", version.ref = "material" }
 
+# Hilt
+google-dagger-hilt-android = { group = "com.google.dagger", name = "hilt-android", version.ref = "hilt" }
+google-dagger-hilt-compiler = { group = "com.google.dagger", name = "hilt-compiler", version.ref = "hilt" }
+androidx-hilt-navigation-compose = { group = "androidx.hilt", name = "hilt-navigation-compose", version.ref = "hiltNavigationCompose" }
+
+# Room
+androidx-room-runtime = { group = "androidx.room", name = "room-runtime", version.ref = "room" }
+androidx-room-ktx = { group = "androidx.room", name = "room-ktx", version.ref = "room" }
+androidx-room-compiler = { group = "androidx.room", name = "room-compiler", version.ref = "room" }
+
+# Compose
+androidx-compose-bom = { group = "androidx.compose", name = "compose-bom", version.ref = "composeBom" }
+androidx-compose-ui = { group = "androidx.compose.ui", name = "ui" }
+androidx-compose-ui-tooling-preview = { group = "androidx.compose.ui", name = "ui-tooling-preview" }
+androidx-compose-ui-tooling = { group = "androidx.compose.ui", name = "ui-tooling" }
+androidx-compose-material3 = { group = "androidx.compose.material3", name = "material3" }
+androidx-compose-material = { group = "androidx.compose.material", name = "material" } # Für Material 2 Komponenten
+androidx-activity-compose = { module = "androidx.activity:activity-compose", version = "1.9.0" } # Beispiel für aktuellere Version
+androidx-lifecycle-viewmodel-compose = { module = "androidx.lifecycle:lifecycle-viewmodel-compose", version = "2.8.2" } # Beispiel für aktuellere Version
+
+# Kotlinx Serialization
+kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "kotlinxSerializationJson"}
+
+# Ktor
+ktor-client-core = { module = "io.ktor:ktor-client-core", version.ref = "ktor" }
+ktor-client-cio = { module = "io.ktor:ktor-client-cio", version.ref = "ktor" } # oder ktor-client-android
+ktor-client-contentnegotiation = { module = "io.ktor:ktor-client-content-negotiation", version.ref = "ktor" }
+ktor-serialization-kotlinx-json = { module = "io.ktor:ktor-serialization-kotlinx-json", version.ref = "ktor" }
+
+# CameraX
+androidx-camera-core = { module = "androidx.camera:camera-core", version.ref = "camerax" }
+androidx-camera-camera2 = { module = "androidx.camera:camera-camera2", version.ref = "camerax" }
+androidx-camera-lifecycle = { module = "androidx.camera:camera-lifecycle", version.ref = "camerax" }
+androidx-camera-view = { module = "androidx.camera:camera-view", version.ref = "camerax" }
+
+# ML Kit Barcode Scanning
+google-mlkit-barcodeScanning = { module = "com.google.mlkit:barcode-scanning", version.ref = "mlkitBarcodeScanning" }
+
+# Coil
+coil-compose = { module = "io.coil-kt:coil-compose", version.ref = "coil" }
+
+# Navigation Compose
+androidx-navigation-compose = { module = "androidx.navigation:navigation-compose", version.ref = "navigationCompose"}
+
+# Kotlin Reflect (Version sollte zur Kotlin Version passen)
+kotlin-reflect = { module = "org.jetbrains.kotlin:kotlin-reflect", version.ref = "kotlin" }
+
+
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
 kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
-
+google-ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
+google-dagger-hilt-android = { id = "com.google.dagger.hilt.android", version.ref = "hilt" }
+# Plugin für Kotlin Compose (wenn nicht schon über kotlin-android abgedeckt, was bei neueren Versionen der Fall sein kann)
+# kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" } # Normalerweise nicht mehr separat nötig
+# Plugin für Kotlin Serialization
+kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
