@@ -1,7 +1,7 @@
 
 [versions]
 agp = "8.10.1"
-kotlin = "2.0.21" # Dies ist die Kotlin-Version deines Projekts
+kotlin = "2.1.21" # Dies ist die Kotlin-Version deines Projekts
 # KSP Version muss zu deiner Kotlin-Version passen.
 # Für Kotlin 2.0.21 ist eine passende KSP-Version z.B. "2.0.21-1.0.18" (bitte prüfen!)
 ksp = "2.0.21-1.0.18" # Ersetze dies mit der korrekten KSP-Version für Kotlin 2.0.21
@@ -101,7 +101,8 @@ kotlin-reflect = { module = "org.jetbrains.kotlin:kotlin-reflect", version.ref =
 android-application = { id = "com.android.application", version.ref = "agp" }
 kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
 google-ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
-google-dagger-hilt-android = { id = "com.google.dagger.hilt.android", version.ref = "hilt" }
+# Geänderter Alias für Hilt Plugin:
+hiltPlugin = { id = "com.google.dagger.hilt.android", version.ref = "hilt" }
 # Plugin für Kotlin Compose (wenn nicht schon über kotlin-android abgedeckt, was bei neueren Versionen der Fall sein kann)
 # kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" } # Normalerweise nicht mehr separat nötig
 # Plugin für Kotlin Serialization
