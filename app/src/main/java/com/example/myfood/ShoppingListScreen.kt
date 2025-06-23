@@ -25,6 +25,7 @@ import coil.compose.AsyncImage // Für Bilder von Open Food Facts
 import com.example.myfood.data.openfoodfacts.OFFProduct
 import com.example.myfood.data.shopping.ShoppingListItem
 
+
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalComposeUiApi::class)
 @Composable
 fun ShoppingListScreen(

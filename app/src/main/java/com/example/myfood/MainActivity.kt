@@ -8,36 +8,44 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.hilt.navigation.compose.hiltViewModel // Für hiltViewModel in Screens
 import androidx.lifecycle.ViewModelProvider
-import androidx.lifecycle.viewmodel.compose.viewModel // Korrekter Import für viewModel()
+// import androidx.lifecycle.viewmodel.compose.viewModel // Wird für RecipeViewModel verwendet
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavType
 import androidx.navigation.compose.*
 import androidx.navigation.navArgument
-import com.example.myfood.navigation.Screen // *** KORRIGIERTER IMPORT FÜR SCREEN ***
+import com.example.myfood.navigation.Screen
 import com.example.myfood.ui.recipe.RecipeDetailScreen
 import com.example.myfood.ui.recipe.RecipeListScreen
-import com.example.myfood.ui.recipe.RecipeViewModel // *** KORREKTER IMPORT FÜR RECIPE VIEW MODEL ***
+import com.example.myfood.ui.recipe.RecipeViewModel
+import com.example.myfood.ui.shoppinglist.ShoppingListScreen // *** IMPORT FÜR SHOPPING LIST SCREEN ***
+// import com.example.myfood.ui.shoppinglist.ShoppingListViewModel // Importieren, wenn nicht per Hilt im Screen geholt
 import com.example.myfood.ui.theme.MyFoodTheme
+import dagger.hilt.android.AndroidEntryPoint // *** FÜR HILT BENÖTIGT ***
 
-
+@AndroidEntryPoint // *** HINZUFÜGEN, WENN DU HILT VERWENDEST ***
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        // FoodViewModel wird hier instanziiert, da es eine Factory verwendet.
+        // Wenn ShoppingListViewModel auch eine Factory bräuchte, müsste es ähnlich gemacht werden.
+        // Ansonsten kann es mit hiltViewModel() direkt im Screen oder hier mit viewModel() geholt werden.
         val foodViewModelFactory = FoodViewModelFactory(application)
         val foodViewModel = ViewModelProvider(this, foodViewModelFactory)[FoodViewModel::class.java]
-        // RecipeViewModel wird jetzt INNERHALB von setContent instanziiert
 
         setContent {
             MyFoodTheme {
-                // Instanziiere RecipeViewModel HIER, im @Composable Kontext
-                val recipeViewModel: RecipeViewModel = viewModel()
+                // RecipeViewModel wird hier mit viewModel() geholt.
+                // ShoppingListViewModel könnte hier auch geholt werden, wenn es nicht per Hilt im Screen selbst geschieht.
+                val recipeViewModel: RecipeViewModel = hiltViewModel() // Oder viewModel() wenn nicht Hilt-spezifisch für die Activity
 
                 AppNavigation(
                     foodViewModel = foodViewModel,
-                    recipeViewModel = recipeViewModel // *** RECIPE VIEW MODEL ÜBERGEBEN ***
+                    recipeViewModel = recipeViewModel
+                    // shoppingListViewModel = shoppingListViewModel // Übergeben, wenn hier instanziiert
                 )
             }
         }
@@ -46,12 +54,20 @@ class MainActivity : ComponentActivity() {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-// AppNavigation muss recipeViewModel als Parameter akzeptieren
-fun AppNavigation(foodViewModel: FoodViewModel, recipeViewModel: RecipeViewModel) {
+// AppNavigation muss die ViewModels akzeptieren, die es an die Screens weitergibt.
+// Wenn ShoppingListViewModel direkt im ShoppingListScreen mit hiltViewModel() geholt wird,
+// muss es hier nicht übergeben werden.
+fun AppNavigation(
+    foodViewModel: FoodViewModel,
+    recipeViewModel: RecipeViewModel
+    // shoppingListViewModel: ShoppingListViewModel // Parameter hinzufügen, falls benötigt
+) {
     val navController = rememberNavController()
+    // *** SHOPPINGLIST ZUR LISTE DER NAVIGATIONSELEMENTE HINZUFÜGEN ***
     val items = listOf(
         Screen.FoodList,
         Screen.Recipes,
+        Screen.ShoppingList // NEU
     )
 
     Scaffold(
@@ -90,7 +106,7 @@ fun AppNavigation(foodViewModel: FoodViewModel, recipeViewModel: RecipeViewModel
                 RecipeListScreen(
                     navController = navController,
                     foodViewModel = foodViewModel,
-                    recipeViewModel = recipeViewModel // *** RECIPE VIEW MODEL WEITERGEBEN ***
+                    recipeViewModel = recipeViewModel
                 )
             }
             composable(
@@ -102,11 +118,23 @@ fun AppNavigation(foodViewModel: FoodViewModel, recipeViewModel: RecipeViewModel
                     RecipeDetailScreen(
                         recipeId = recipeId,
                         navController = navController,
-                        recipeViewModel = recipeViewModel // *** RECIPE VIEW MODEL WEITERGEBEN ***
+                        recipeViewModel = recipeViewModel
                     )
                 } else {
                     Text("Fehler: Rezept-ID nicht gefunden.")
                 }
+            }
+
+            // *** NEUE ROUTE FÜR DEN SHOPPINGLISTSCREEN HINZUFÜGEN ***
+            composable(Screen.ShoppingList.route) {
+                // Wenn ShoppingListViewModel per Hilt direkt im Screen geholt wird:
+                ShoppingListScreen()
+
+                // Wenn ShoppingListViewModel hier übergeben werden soll:
+                // ShoppingListScreen(
+                //     navController = navController,
+                //     viewModel = shoppingListViewModel // shoppingListViewModel müsste an AppNavigation übergeben werden
+                // )
             }
         }
     }

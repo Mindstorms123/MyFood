@@ -6,6 +6,7 @@ plugins {
     id("org.jetbrains.kotlin.plugin.serialization") version "1.9.21"
     id("kotlin-kapt")
     //id("org.jetbrains.kotlin.android") version "2.1.21" apply false
+    id ("com.google.dagger.hilt.android")
 }
 
 android {
@@ -33,8 +34,8 @@ android {
     }
 
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_11
-        targetCompatibility = JavaVersion.VERSION_11
+        sourceCompatibility = JavaVersion.VERSION_21
+        targetCompatibility = JavaVersion.VERSION_21
     }
 
     kotlinOptions {
@@ -57,6 +58,11 @@ kotlin {
         //languageSettings.optIn("kotlinx.serialization.ExperimentalSerializationApi")
     }
 
+// Allow references to generated code
+kapt {
+    correctErrorTypes = true
+}
+
 
 dependencies {
     // Compose BOM – centralizes versioning
@@ -74,6 +80,7 @@ dependencies {
     // Compose Material (for specific components like SwipeToDismiss if not yet in M3)
     implementation("androidx.compose.material:material")
     implementation("androidx.compose.material:material-icons-extended") // BOM should manage version
+    implementation("com.google.android.material:material:1.12.0")
 
     // Activity for Compose
     implementation("androidx.activity:activity-compose:1.8.2") // Check if BOM updates this
@@ -124,4 +131,9 @@ dependencies {
 
     // Remove annotationProcessor if you are using kapt for Room
     // annotationProcessor("androidx.room:room-compiler:2.7.1") // Kapt replaces this for Kotlin
+
+    // hilt
+    implementation("com.google.dagger:hilt-android:2.51.1") // Deine Hilt Version
+    kapt("com.google.dagger:hilt-compiler:2.51.1")     // Deine Hilt Version
+    implementation("androidx.hilt:hilt-navigation-compose:1.2.0") // oder die aktuellste Version
 }
