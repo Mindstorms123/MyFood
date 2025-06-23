@@ -6,6 +6,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.compose.runtime.mutableStateListOf
 import androidx.lifecycle.viewModelScope
+import com.example.myfood.data.openfoodfacts.OFFProduct // Importiere OFFProduct
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 
@@ -15,7 +16,6 @@ class FoodViewModel(application: Application) : AndroidViewModel(application) {
 
     init {
         viewModelScope.launch {
-            // FoodStore.getFoodList gibt jetzt Flow<List<FoodItem>> zurück
             FoodStore.getFoodList(application).collectLatest { loadedItems ->
                 _foodItemsInternal.clear()
                 _foodItemsInternal.addAll(loadedItems)
@@ -23,36 +23,44 @@ class FoodViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    // Methode zum Hinzufügen eines manuell eingegebenen Items
     fun addManualItem(name: String, brand: String? = null, quantity: Int = 1) {
-        val newItem = FoodItem(name = name, brand = brand, quantity = quantity.coerceAtLeast(0)) // Menge min. 0
+        val newItem = FoodItem(name = name, brand = brand, quantity = quantity.coerceAtLeast(0))
         _foodItemsInternal.add(newItem)
         saveItems()
     }
 
-    // Methode zum Hinzufügen eines Produkts, das von der API geholt wurde
-    fun addScannedProduct(productData: ProductFromAPI) {
+    fun addScannedProduct(product: OFFProduct) {
         val newItem = FoodItem(
-            name = determineProductName(productData),
-            brand = productData.brands?.takeIf { it.isNotBlank() }, // Nur nicht-leere Marken übernehmen
-            quantity = 1 // Standardmenge für neue gescannte Artikel
+            name = determineProductName(product),
+            brand = product.brands?.takeIf { it.isNotBlank() }, // Nutzt product.brands direkt
+            quantity = 1,
+            openFoodFactsId = product.id
         )
         _foodItemsInternal.add(newItem)
         saveItems()
     }
 
-    // Hilfsfunktion zur Namensbestimmung
-    private fun determineProductName(productData: ProductFromAPI): String {
-        return productData.product_name?.takeIf { it.isNotBlank() }
+    // KORRIGIERTE VERSION - PASSE FELDNAMEN AN DEINE OFFProduct-KLASSE AN!
+    private fun determineProductName(product: OFFProduct): String {
+        // Die einfachste und sauberste Methode ist, die Hilfsfunktion aus OFFProduct zu verwenden:
+        return product.getDisplayName()
+
+        // ODER, wenn du die Logik explizit hier haben möchtest (stelle sicher,
+        // dass die Feldnamen mit deiner OFFProduct-Definition übereinstimmen):
+        /*
+        return product.productNameDE?.takeIf { it.isNotBlank() }
+            ?: product.productName?.takeIf { it.isNotBlank() }
+            ?: product.genericNameDE?.takeIf { it.isNotBlank() } // Nutze korrekte Feldnamen
+            ?: product.genericName?.takeIf { it.isNotBlank() }   // Nutze korrekte Feldnamen
             ?: run {
-                val waterKeywords = productData._keywords?.filter {
-                    it.contains("wasser", ignoreCase = true) || it.contains("mineral", ignoreCase = true)
-                }
-                val keywordName = waterKeywords?.firstOrNull()
-                    ?: productData._keywords?.firstOrNull()
+                val primaryKeyword = product.keywords?.firstOrNull { keyword: String -> keyword.isNotBlank() }
+                primaryKeyword
+                    ?.replace("-", " ")
+                    ?.replace("_", " ")
+                    ?: product.id // Fallback auf ID, wenn vorhanden
                     ?: "Unbekanntes Produkt"
-                keywordName.replace("-", " ").replace("_", " ")
             }
+        */
     }
 
     fun removeItem(index: Int) {
@@ -63,13 +71,12 @@ class FoodViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun updateItemName(index: Int, newName: String) {
-        if (index in _foodItemsInternal.indices && newName.isNotBlank()) { // Namen dürfen nicht leer sein
+        if (index in _foodItemsInternal.indices && newName.isNotBlank()) {
             _foodItemsInternal[index] = _foodItemsInternal[index].copy(name = newName)
             saveItems()
         }
     }
 
-    // Optional: Methode zum Aktualisieren der Marke
     fun updateItemBrand(index: Int, newBrand: String?) {
         if (index in _foodItemsInternal.indices) {
             _foodItemsInternal[index] = _foodItemsInternal[index].copy(brand = newBrand?.takeIf { it.isNotBlank() })
@@ -79,7 +86,6 @@ class FoodViewModel(application: Application) : AndroidViewModel(application) {
 
     fun updateItemQuantity(index: Int, newQuantity: Int) {
         if (index in _foodItemsInternal.indices) {
-            // Stelle sicher, dass die Menge nicht negativ wird (oder was auch immer deine Regel ist)
             _foodItemsInternal[index] = _foodItemsInternal[index].copy(quantity = newQuantity.coerceAtLeast(0))
             saveItems()
         }
@@ -92,7 +98,6 @@ class FoodViewModel(application: Application) : AndroidViewModel(application) {
     }
 }
 
-// Die ViewModelFactory bleibt gleich
 class FoodViewModelFactory(private val application: Application) : ViewModelProvider.Factory {
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         if (modelClass.isAssignableFrom(FoodViewModel::class.java)) {

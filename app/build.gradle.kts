@@ -3,7 +3,7 @@ plugins {
     // Or id("com.android.application")
     alias(libs.plugins.kotlin.android)    // Or id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
-    id("org.jetbrains.kotlin.plugin.serialization") version "1.9.21"
+    id("org.jetbrains.kotlin.plugin.serialization") version "2.1.21"
     id("kotlin-kapt")
     //id("org.jetbrains.kotlin.android") version "2.1.21" apply false
     id ("com.google.dagger.hilt.android")
@@ -136,4 +136,6 @@ dependencies {
     implementation("com.google.dagger:hilt-android:2.51.1") // Deine Hilt Version
     kapt("com.google.dagger:hilt-compiler:2.51.1")     // Deine Hilt Version
     implementation("androidx.hilt:hilt-navigation-compose:1.2.0") // oder die aktuellste Version
+
+
 }

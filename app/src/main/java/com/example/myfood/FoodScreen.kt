@@ -40,7 +40,8 @@ import androidx.core.content.ContextCompat
 import com.google.mlkit.vision.barcode.common.Barcode
 import com.google.mlkit.vision.barcode.BarcodeScannerOptions
 import com.google.mlkit.vision.barcode.BarcodeScanning
-import com.google.mlkit.vision.barcode.BarcodeScanner // MLKit BarcodeScanner
+// MLKit BarcodeScanner, expliziter Import um Doppeldeutigkeit zu vermeiden, falls andere Scanner Klassen existieren
+import com.google.mlkit.vision.barcode.BarcodeScanner as MLKitBarcodeScanner
 import com.google.mlkit.vision.common.InputImage
 import io.ktor.client.*
 import io.ktor.client.call.*
@@ -54,6 +55,8 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import androidx.lifecycle.LifecycleOwner
 import androidx.activity.compose.BackHandler
+import com.example.myfood.data.openfoodfacts.OFFProduct // <--- KORREKTUR: Importiere OFFProduct
+import kotlinx.serialization.Serializable // <--- KORREKTUR: Importiere Serializable für ProductResponse unten
 
 // Ktor client Instanz
 private val client = HttpClient(CIO) {
@@ -65,12 +68,22 @@ private val client = HttpClient(CIO) {
     }
 }
 
+// KORREKTUR: Diese ProductResponse ist spezifisch für den API-Endpunkt, den fetchProductApi hier verwendet.
+// Sie muss OFFProduct für das 'product'-Feld verwenden.
+@Serializable
+data class PantryProductResponse( // Umbenannt, um Verwechslung mit globaler ProductResponse zu vermeiden, falls vorhanden
+    val status: Int,
+    @kotlinx.serialization.SerialName("product")
+    val product: OFFProduct? = null // <--- KORREKTUR: Verwende OFFProduct
+)
+
+
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterialApi::class)
 @Composable
 fun FoodScreen(viewModel: FoodViewModel) {
     var addOrEditDialogOpen by remember { mutableStateOf(false) }
     var itemBeingEdited by remember { mutableStateOf<FoodItem?>(null) }
-    var editingIndex by remember { mutableStateOf(-1) } // Behalten für direkte Index-Updates
+    var editingIndex by remember { mutableStateOf(-1) }
 
     var showScanner by remember { mutableStateOf(false) }
     var cameraPermissionGranted by remember { mutableStateOf(false) }
@@ -99,11 +112,11 @@ fun FoodScreen(viewModel: FoodViewModel) {
         topBar = { TopAppBar(title = { Text("Lebensmittelliste") }) },
         floatingActionButton = {
             Row(
-                modifier = Modifier.padding(end = 16.dp), // Padding für FABs von Scaffold Kante
+                modifier = Modifier.padding(end = 16.dp),
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 FloatingActionButton(onClick = {
-                    itemBeingEdited = null // Add-Modus
+                    itemBeingEdited = null
                     addOrEditDialogOpen = true
                 }) { Icon(Icons.Default.Add, "Neues Lebensmittel") }
 
@@ -120,17 +133,17 @@ fun FoodScreen(viewModel: FoodViewModel) {
         LazyColumn(
             modifier = Modifier
                 .padding(paddingValues)
-                .padding(horizontal = 16.dp, vertical = 8.dp), // Innenpadding für die Liste
+                .padding(horizontal = 16.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             itemsIndexed(
-                items = viewModel.foodItems,
-                key = { _, item -> item.id } // Eindeutige ID als Key
+                items = viewModel.foodItems, // Annahme: viewModel.foodItems ist StateFlow<List<FoodItem>> oder ähnliches
+                key = { _, item -> item.id }
             ) { index, item ->
                 val dismissState = rememberDismissState(
                     confirmStateChange = {
                         if (it == DismissValue.DismissedToEnd || it == DismissValue.DismissedToStart) {
-                            viewModel.removeItem(index)
+                            viewModel.removeItem(index) // viewModel.removeItem sollte den Index oder das Item selbst nehmen
                             true
                         } else false
                     }
@@ -138,20 +151,20 @@ fun FoodScreen(viewModel: FoodViewModel) {
                 SwipeToDismiss(
                     state = dismissState,
                     directions = setOf(DismissDirection.StartToEnd, DismissDirection.EndToStart),
-                    background = { /* ... (Lösch-Icon Hintergrund bleibt gleich) ... */
+                    background = {
                         val direction = dismissState.dismissDirection ?: return@SwipeToDismiss
                         val alignment = if (direction == DismissDirection.StartToEnd) Alignment.CenterStart else Alignment.CenterEnd
                         Box(
                             Modifier
                                 .fillMaxSize()
-                                .padding(horizontal = 20.dp), // Padding für das Icon
+                                .padding(horizontal = 20.dp),
                             contentAlignment = alignment
                         ) {
                             Icon(Icons.Default.Delete, "Löschen", tint = MaterialTheme.colorScheme.error)
                         }
                     },
                     dismissContent = {
-                        FoodItemEntry( // Verwende eine neue Composable für den Eintrag
+                        FoodItemEntry(
                             item = item,
                             onEditClick = {
                                 itemBeingEdited = item
@@ -171,12 +184,13 @@ fun FoodScreen(viewModel: FoodViewModel) {
                 itemToEdit = itemBeingEdited,
                 onDismiss = { addOrEditDialogOpen = false },
                 onSave = { name, brand, quantity ->
-                    if (itemBeingEdited == null) { // Add-Modus
+                    if (itemBeingEdited == null) {
                         viewModel.addManualItem(name, brand, quantity)
-                    } else { // Edit-Modus
+                    } else {
                         if(editingIndex != -1) {
+                            // Annahme: diese Methoden existieren und aktualisieren das Item im ViewModel
                             viewModel.updateItemName(editingIndex, name)
-                            viewModel.updateItemBrand(editingIndex, brand) // Stelle sicher, dass diese Methode im VM existiert
+                            viewModel.updateItemBrand(editingIndex, brand)
                             viewModel.updateItemQuantity(editingIndex, quantity)
                         }
                     }
@@ -186,16 +200,16 @@ fun FoodScreen(viewModel: FoodViewModel) {
         }
 
         if (showScanner) {
-            ScannerView( // Umbenannt von BarcodeScanner zu ScannerView, um Verwechslung mit MLKit zu vermeiden
+            ScannerView(
                 onClose = { showScanner = false },
                 onBarcodeScanned = { barcode ->
-                    showScanner = false // Scanner sofort schließen
+                    showScanner = false
                     coroutineScope.launch {
-                        val productData = fetchProductApi(barcode) // API-Aufruf
+                        val productData: OFFProduct? = fetchProductApi(barcode) // <--- KORREKTUR: Typ ist OFFProduct?
                         if (productData != null) {
+                            // Annahme: viewModel.addScannedProduct nimmt ein OFFProduct entgegen
                             viewModel.addScannedProduct(productData)
                         } else {
-                            // Optional: Zeige eine Snackbar oder füge ein "Nicht gefunden"-Item hinzu
                             viewModel.addManualItem("Produkt nicht gefunden: $barcode", quantity = 0)
                         }
                     }
@@ -216,7 +230,7 @@ fun FoodItemEntry(
     Card(
         modifier = Modifier.fillMaxWidth(),
         elevation = CardDefaults.cardElevation(2.dp),
-        onClick = onEditClick // Klick auf die Karte öffnet den Edit-Dialog
+        onClick = onEditClick
     ) {
         Row(
             modifier = Modifier
@@ -235,7 +249,7 @@ fun FoodItemEntry(
                 quantity = item.quantity,
                 onIncrease = onQuantityIncrease,
                 onDecrease = onQuantityDecrease,
-                enabled = item.quantity > 0 // Minus-Button deaktivieren, wenn Menge 0 ist
+                enabled = item.quantity > 0
             )
         }
     }
@@ -246,10 +260,10 @@ fun QuantityControl(
     quantity: Int,
     onIncrease: () -> Unit,
     onDecrease: () -> Unit,
-    enabled: Boolean = true // Um den Minus-Button bei Menge 0 zu deaktivieren
+    enabled: Boolean = true
 ) {
     Row(verticalAlignment = Alignment.CenterVertically) {
-        IconButton(onClick = onDecrease, enabled = quantity > 0 && enabled) { // Minus-Button ist deaktiviert, wenn Menge 0 oder explizit deaktiviert
+        IconButton(onClick = onDecrease, enabled = quantity > 0 && enabled) {
             Icon(Icons.Filled.RemoveCircle, "Menge verringern")
         }
         Text(
@@ -296,7 +310,6 @@ fun AddEditFoodDialog(
                 OutlinedTextField(
                     value = quantityString,
                     onValueChange = { newValue ->
-                        // Erlaube nur Ziffern und leeren String (für vorübergehende Eingabe)
                         if (newValue.all { it.isDigit() }) {
                             quantityString = newValue
                         }
@@ -310,12 +323,12 @@ fun AddEditFoodDialog(
         confirmButton = {
             Button(
                 onClick = {
-                    val currentQuantity = quantityString.toIntOrNull() ?: (if (itemToEdit == null) 1 else 0) // Default 1 bei neu, 0 wenn Umwandlung fehlschlägt
+                    val currentQuantity = quantityString.toIntOrNull() ?: (if (itemToEdit == null) 1 else 0)
                     if (name.isNotBlank()) {
                         onSave(name, brand, currentQuantity.coerceAtLeast(0))
                     }
                 },
-                enabled = name.isNotBlank() // Speichern nur möglich, wenn Name nicht leer ist
+                enabled = name.isNotBlank()
             ) {
                 Text(if (itemToEdit == null) "Hinzufügen" else "Speichern")
             }
@@ -326,7 +339,6 @@ fun AddEditFoodDialog(
     )
 }
 
-// Barcode Scanner View (umbenannt, um Konflikt mit MLKit Scanner zu vermeiden)
 @Composable
 fun ScannerView(
     onClose: () -> Unit,
@@ -334,11 +346,10 @@ fun ScannerView(
     lifecycleOwner: LifecycleOwner
 ) {
     val context = LocalContext.current
-    var hasScanned by remember { mutableStateOf(false) } // Verhindert mehrfaches Scannen
+    var hasScanned by remember { mutableStateOf(false) }
 
-    // NEU: BackHandler, um das Drücken der Zurück-Taste abzufangen
-    BackHandler(enabled = true) { // enabled = true, da der Handler aktiv sein soll, solange der Scanner sichtbar ist
-        onClose() // Ruft die onClose-Lambda auf, die showScanner auf false setzt
+    BackHandler(enabled = true) {
+        onClose()
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
@@ -352,20 +363,20 @@ fun ScannerView(
                         it.setSurfaceProvider(previewView.surfaceProvider)
                     }
                     val options = BarcodeScannerOptions.Builder()
-                        .setBarcodeFormats(Barcode.FORMAT_EAN_13, Barcode.FORMAT_EAN_8, Barcode.FORMAT_UPC_A, Barcode.FORMAT_UPC_E, Barcode.FORMAT_QR_CODE) // Gängige Formate
+                        .setBarcodeFormats(Barcode.FORMAT_EAN_13, Barcode.FORMAT_EAN_8, Barcode.FORMAT_UPC_A, Barcode.FORMAT_UPC_E, Barcode.FORMAT_QR_CODE)
                         .build()
-                    val mlKitScanner = BarcodeScanning.getClient(options) // MLKit Instanz
+                    val mlKitScanner = BarcodeScanning.getClient(options)
                     val imageAnalysis = ImageAnalysis.Builder()
                         .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
                         .build()
                         .also {
                             it.setAnalyzer(ContextCompat.getMainExecutor(ctx)) { imageProxy ->
-                                if (!hasScanned) { // Nur analysieren, wenn noch nicht gescannt
+                                if (!hasScanned) {
                                     processImageProxyForScan(mlKitScanner, imageProxy, onBarcodeScanned) { scanned ->
-                                        if (scanned) hasScanned = true // Setze Flag, wenn erfolgreich gescannt
+                                        if (scanned) hasScanned = true
                                     }
                                 } else {
-                                    imageProxy.close() // Schließe, wenn schon gescannt
+                                    imageProxy.close()
                                 }
                             }
                         }
@@ -391,10 +402,10 @@ fun ScannerView(
 
 @androidx.annotation.OptIn(ExperimentalGetImage::class)
 private fun processImageProxyForScan(
-    scanner: com.google.mlkit.vision.barcode.BarcodeScanner, // Explizit MLKit Scanner
+    scanner: MLKitBarcodeScanner, // KORREKTUR: Verwende den Alias für Klarheit
     imageProxy: ImageProxy,
     onBarcodeFound: (String) -> Unit,
-    onScanAttemptComplete: (Boolean) -> Unit // Callback, ob ein Barcode gefunden wurde
+    onScanAttemptComplete: (Boolean) -> Unit
 ) {
     imageProxy.image?.let { mediaImage ->
         val image = InputImage.fromMediaImage(mediaImage, imageProxy.imageInfo.rotationDegrees)
@@ -403,29 +414,31 @@ private fun processImageProxyForScan(
                 if (barcodes.isNotEmpty()) {
                     barcodes.firstNotNullOfOrNull { it.rawValue }?.let { barcodeValue ->
                         onBarcodeFound(barcodeValue)
-                        onScanAttemptComplete(true) // Barcode gefunden
+                        onScanAttemptComplete(true)
                         return@addOnSuccessListener
                     }
                 }
-                onScanAttemptComplete(false) // Kein Barcode gefunden
+                onScanAttemptComplete(false)
             }
             .addOnFailureListener {
                 it.printStackTrace()
-                onScanAttemptComplete(false) // Fehler
+                onScanAttemptComplete(false)
             }
             .addOnCompleteListener {
-                imageProxy.close() // Wichtig: ImageProxy immer schließen
+                imageProxy.close()
             }
-    } ?: imageProxy.close() // Schließen, wenn mediaImage null ist
+    } ?: imageProxy.close()
 }
 
 // API-Abruffunktion
-suspend fun fetchProductApi(barcode: String): ProductFromAPI? = withContext(Dispatchers.IO) {
+// KORREKTUR: Rückgabetyp ist jetzt OFFProduct?
+suspend fun fetchProductApi(barcode: String): OFFProduct? = withContext(Dispatchers.IO) {
     try {
-        val response: ProductResponse = // Verwendet die ProductResponse aus FoodItem.kt
+        // KORREKTUR: Die Antwort wird in PantryProductResponse deserialisiert, die OFFProduct enthält
+        val response: PantryProductResponse =
             client.get("https://world.openfoodfacts.org/api/v0/product/$barcode.json").body()
         if (response.status == 1 && response.product != null) {
-            response.product // Gibt das ProductFromAPI-Objekt zurück
+            response.product // Gibt das OFFProduct-Objekt zurück
         } else {
             null
         }
@@ -435,10 +448,10 @@ suspend fun fetchProductApi(barcode: String): ProductFromAPI? = withContext(Disp
     }
 }
 
-// Internet Check Funktion (optional, aber gut zu haben)
+// Internet Check Funktion
 suspend fun checkInternetConnection(): Boolean = withContext(Dispatchers.IO) {
     try {
-        HttpClient(CIO).use { clientCheck -> // .use stellt sicher, dass der Client geschlossen wird
+        HttpClient(CIO).use { clientCheck ->
             clientCheck.get("https://world.openfoodfacts.org").status.value in 200..299
         }
     } catch (e: Exception) {
