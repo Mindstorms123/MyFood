@@ -555,4 +555,3 @@ suspend fun fetchProductApi(barcode: String): OFFProduct? = withContext(Dispatch
 // Die `checkInternetConnection` Funktion bleibt wie sie ist.
 // `getDisplayName` Extension für OFFProduct sollte im FoodViewModel oder einer Utility-Datei sein.
 // fun OFFProduct.getDisplayName(): String = this.productName ?: this.genericName ?: this.name ?: "Produkt ohne Namen"
-

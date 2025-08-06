@@ -1,3 +1,5 @@
 <resources>
     <string name="app_name">My Food</string>
+    <string name="notification_channel_name">Ablaufwarnungen</string>
+    <string name="notification_channel_description">Benachrichtigungen für bald ablaufende Produkte</string>
 </resources>

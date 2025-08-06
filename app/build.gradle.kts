@@ -66,7 +66,7 @@ kapt {
 
 dependencies {
     // Compose BOM – centralizes versioning
-    implementation(platform("androidx.compose:compose-bom:2024.05.00"))
+    implementation(platform("androidx.compose:compose-bom:2025.07.00"))
 
     // Compose UI
     implementation("androidx.compose.ui:ui")
@@ -83,24 +83,24 @@ dependencies {
     implementation("com.google.android.material:material:1.12.0")
 
     // Activity for Compose
-    implementation("androidx.activity:activity-compose:1.8.2") // Check if BOM updates this
+    implementation("androidx.activity:activity-compose:1.10.1") // Check if BOM updates this
 
     // ViewModel for Compose
-    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.6.2") // Check if BOM updates this
+    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.9.2") // Check if BOM updates this
 
     // DataStore for local storage
-    implementation("androidx.datastore:datastore-preferences:1.0.0")
+    implementation("androidx.datastore:datastore-preferences:1.1.7")
 
     // JSON Serialization
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.5.1")
 
     // CameraX
     // implementation ("com.journeyapps:zxing-android-embedded:4.3.0") // If you choose to use this instead of CameraX + ML Kit
-    implementation("com.google.mlkit:barcode-scanning:17.0.3")
-    implementation("androidx.camera:camera-core:1.2.3") // Consider using newer versions if available (e.g., 1.3.x)
-    implementation("androidx.camera:camera-camera2:1.2.3")
-    implementation("androidx.camera:camera-lifecycle:1.2.3")
-    implementation("androidx.camera:camera-view:1.2.3")
+    implementation("com.google.mlkit:barcode-scanning:17.3.0")
+    implementation("androidx.camera:camera-core:1.4.2") // Consider using newer versions if available (e.g., 1.3.x)
+    implementation("androidx.camera:camera-camera2:1.4.2")
+    implementation("androidx.camera:camera-lifecycle:1.4.2")
+    implementation("androidx.camera:camera-view:1.4.2")
 
     // Ktor (HTTP Client)
     implementation("io.ktor:ktor-client-core:2.3.4")
@@ -114,20 +114,20 @@ dependencies {
     // implementation(libs.material) // For View system Material, potentially removable
 
     // Navigation Compose
-    implementation("androidx.navigation:navigation-compose:2.7.7")
+    implementation("androidx.navigation:navigation-compose:2.9.3")
 
     // Coil for image loading in Compose
     implementation("io.coil-kt:coil-compose:2.6.0")
 
     // Room components
-    implementation("androidx.room:room-runtime:2.7.1") // Ensure this version is correct, consider 2.6.1 if 2.7.1 is alpha/beta and causing issues
-    kapt("androidx.room:room-compiler:2.7.1")
-    implementation("androidx.room:room-ktx:2.7.1") // Coroutines support
+    implementation("androidx.room:room-runtime:2.7.2") // Ensure this version is correct, consider 2.6.1 if 2.7.1 is alpha/beta and causing issues
+    kapt("androidx.room:room-compiler:2.7.2")
+    implementation("androidx.room:room-ktx:2.7.2") // Coroutines support
     // Optional Room extensions (include only if you use them)
     // implementation("androidx.room:room-rxjava2:2.7.1")
     // implementation("androidx.room:room-rxjava3:2.7.1")
     // implementation("androidx.room:room-guava:2.7.1")
-    testImplementation("androidx.room:room-testing:2.7.1")
+    testImplementation("androidx.room:room-testing:2.7.2")
 
     // Remove annotationProcessor if you are using kapt for Room
     // annotationProcessor("androidx.room:room-compiler:2.7.1") // Kapt replaces this for Kotlin
@@ -136,6 +136,14 @@ dependencies {
     implementation("com.google.dagger:hilt-android:2.51.1") // Deine Hilt Version
     kapt("com.google.dagger:hilt-compiler:2.51.1")     // Deine Hilt Version
     implementation("androidx.hilt:hilt-navigation-compose:1.2.0") // oder die aktuellste Version
+    implementation ("androidx.hilt:hilt-work:1.2.0")
 
+    // WorkManager
+    implementation ("androidx.work:work-runtime-ktx:2.10.3")
 
+    // Für DataStore (wenn UserPreferencesRepository es verwendet)
+    implementation ("androidx.datastore:datastore-preferences:1.1.1")
+
+    //notification-builder
+    implementation ("androidx.core:core-ktx:1.13.1")
 }
