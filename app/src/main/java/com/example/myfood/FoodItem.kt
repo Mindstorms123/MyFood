@@ -4,6 +4,8 @@ import androidx.room.Entity
 import kotlinx.serialization.SerialName
 import java.util.UUID // Für FoodItem ID
 import kotlinx.serialization.Serializable
+import java.time.LocalDate
+import kotlinx.serialization.Contextual
 // Importiere OFFProduct, wenn du es direkt in ProductResponse verwenden willst
 import com.example.myfood.data.openfoodfacts.OFFProduct
 
@@ -25,7 +27,9 @@ data class FoodItem(
     var name: String,
     var brand: String? = null,
     var quantity: Int = 1,
-    val openFoodFactsId: String? = null // Sehr gut, dass das jetzt da ist!
+    val openFoodFactsId: String? = null,
+    @Contextual
+    val expiryDate: LocalDate? = null
 )
 
 @Serializable

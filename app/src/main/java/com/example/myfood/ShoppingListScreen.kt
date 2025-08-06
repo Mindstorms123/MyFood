@@ -24,6 +24,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage // Für Bilder von Open Food Facts
 import com.example.myfood.data.openfoodfacts.OFFProduct
 import com.example.myfood.data.shopping.ShoppingListItem
+import androidx.navigation.NavController
 
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalComposeUiApi::class)
