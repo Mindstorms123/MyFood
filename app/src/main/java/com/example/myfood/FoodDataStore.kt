@@ -13,7 +13,7 @@ val Context.dataStore by preferencesDataStore(name = "food_store_v2") // Neuer N
 
 object FoodStore {
     // Neuer Key-Name, da sich die Datenstruktur ändert (von List<String> zu List<FoodItem>)
-    private val FOOD_ITEM_LIST_KEY = stringPreferencesKey("food_item_objects_list")
+    public val FOOD_ITEM_LIST_KEY = stringPreferencesKey("food_item_objects_list")
 
     // Gibt jetzt Flow<List<FoodItem>> zurück
     fun getFoodList(context: Context): Flow<List<FoodItem>> {

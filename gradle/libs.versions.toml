@@ -4,7 +4,7 @@ agp = "8.10.1"
 kotlin = "2.1.21" # Dies ist die Kotlin-Version deines Projekts
 # KSP Version muss zu deiner Kotlin-Version passen.
 # Für Kotlin 2.0.21 ist eine passende KSP-Version z.B. "2.0.21-1.0.18" (bitte prüfen!)
-ksp = "2.0.21-1.0.18" # Ersetze dies mit der korrekten KSP-Version für Kotlin 2.0.21
+ksp = "2.1.21-1.0.18" # Ersetze dies mit der korrekten KSP-Version für Kotlin 2.0.21
 hilt = "2.51.1"        # Oder die aktuellste Hilt-Version (z.B. 2.51.1)
 coreKtx = "1.16.0"
 junit = "4.13.2"

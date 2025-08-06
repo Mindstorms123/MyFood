@@ -28,7 +28,7 @@ data class FoodItem(
     var brand: String? = null,
     var quantity: Int = 1,
     val openFoodFactsId: String? = null,
-    @Contextual
+    @Serializable(with = LocalDateSerializer::class)
     val expiryDate: LocalDate? = null
 )
 

@@ -132,11 +132,14 @@ dependencies {
     // Remove annotationProcessor if you are using kapt for Room
     // annotationProcessor("androidx.room:room-compiler:2.7.1") // Kapt replaces this for Kotlin
 
-    // hilt
-    implementation("com.google.dagger:hilt-android:2.51.1") // Deine Hilt Version
-    kapt("com.google.dagger:hilt-compiler:2.51.1")     // Deine Hilt Version
-    implementation("androidx.hilt:hilt-navigation-compose:1.2.0") // oder die aktuellste Version
-    implementation ("androidx.hilt:hilt-work:1.2.0")
+    // Hilt
+    implementation("com.google.dagger:hilt-android:2.55")
+    kapt("com.google.dagger:hilt-compiler:2.55")
+
+    // Hilt AndroidX extensions (for ViewModel, WorkManager, Navigation)
+    implementation("androidx.hilt:hilt-navigation-compose:1.2.0")
+    implementation("androidx.hilt:hilt-work:1.2.0")
+    kapt("androidx.hilt:hilt-compiler:1.2.0") // This is the compiler for the Hilt AndroidX extensions
 
     // WorkManager
     implementation ("androidx.work:work-runtime-ktx:2.10.3")

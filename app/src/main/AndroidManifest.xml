@@ -1,38 +1,53 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="com.example.myfood">
+    xmlns:tools="http://schemas.android.com/tools" package="com.example.myfood">
 
-    <!-- Berechtigung für Kamera-Zugriff (für Barcode Scanner) -->
-    <uses-permission android:name="android.permission.CAMERA" />
-    <uses-permission android:name="android.permission.INTERNET" />
-    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
-    <uses-feature android:name="android.hardware.camera" android:required="false" />
+    <!-- Berechtigungen -->
+<uses-permission android:name="android.permission.CAMERA" />
+<uses-permission android:name="android.permission.INTERNET" />
+<uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
 
+    <!-- Kamera-Feature (optional) -->
+<uses-feature android:name="android.hardware.camera" android:required="false" />
 
-    <application
-        android:allowBackup="true"
-        android:label="MyFood"
-        android:icon="@mipmap/ic_launcher"
-        android:roundIcon="@mipmap/ic_launcher_round"
-        android:supportsRtl="true"
-        android:theme="@style/Theme.MyFood"
-        android:name=".MyFoodApplication">
+<application
+android:allowBackup="true"
+android:label="MyFood"
+android:icon="@mipmap/ic_launcher"
+android:roundIcon="@mipmap/ic_launcher_round"
+android:supportsRtl="true"
+android:theme="@style/Theme.MyFood"
+android:name=".MyFoodApplication"> <!-- Korrekt auf deine Application-Klasse verwiesen -->
 
-        <activity
-            android:name=".MainActivity"
-            android:exported="true"> <!-- notwendig ab Android 12 -->
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
-        </activity>
+<activity
+    android:name=".MainActivity"
+    android:exported="true">
+    <intent-filter>
+        <action android:name="android.intent.action.MAIN" />
+        <category android:name="android.intent.category.LAUNCHER" />
+    </intent-filter>
+</activity>
 
-        <!-- Falls du Barcode Scanner als eigene Activity hast, hier hinzufügen -->
-        <!--
-        <activity
-            android:name=".BarcodeScannerActivity"
-            android:exported="false" />
-        -->
+<!-- BarcodeScannerActivity (auskommentiert, wie in deinem Original) -->
+<!--
+<activity
+    android:name=".BarcodeScannerActivity"
+    android:exported="false" />
+-->
 
-    </application>
+<!-- App Startup Provider Konfiguration -->
+<!-- Deaktiviert die automatische Initialisierung von WorkManager, -->
+<!-- damit unsere manuelle Konfiguration in MyFoodApplication greift. -->
+<provider
+    android:name="androidx.startup.InitializationProvider"
+    android:authorities="${applicationId}.androidx-startup"
+    android:exported="false"
+    tools:node="merge">
+    <meta-data
+        android:name="androidx.work.WorkManagerInitializer"
+        android:value="androidx.startup"
+        tools:node="remove" />
+</provider>
 
-</manifest>
+</application>
+
+    </manifest>
