@@ -1,7 +1,7 @@
 package com.example.myfood.di
 
 import com.example.myfood.data.pantry.DataStorePantryRepository // For the implementation
-import com.example.myfood.data.pantry.PantryRepository       // <-- THIS IS LIKELY THE MISSING OR INCORRECT IMPORT
+import com.example.myfood.data.pantry.PantryRepository
 import dagger.Binds
 import dagger.Module
 import dagger.hilt.InstallIn

@@ -49,6 +49,7 @@ android {
     composeOptions {
         kotlinCompilerExtensionVersion = "1.5.12" // Consider aligning this with your Kotlin plugin version if issues arise
     }
+
 }
 
 kotlin {

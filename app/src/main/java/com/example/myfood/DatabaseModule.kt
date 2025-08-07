@@ -4,6 +4,8 @@ import android.content.Context
 import androidx.room.Room
 import com.example.myfood.data.AppDatabase
 import com.example.myfood.data.shopping.ShoppingListDao
+// Importiere hier andere DAOs, falls deine AppDatabase mehr als nur das ShoppingListDao hat
+// import com.example.myfood.data.pantry.PantryDao // Beispiel, falls du es verwendest
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -22,12 +24,24 @@ object DatabaseModule {
             appContext,
             AppDatabase::class.java,
             "my_food_database" // Name your database file
-        ).build()
+        )
+            .fallbackToDestructiveMigration() // <<< HIER IST DIE KORREKTUR/ERGÄNZUNG
+            .build()
     }
 
     @Provides
-    @Singleton
+    // Die @Singleton Annotation ist hier nicht unbedingt nötig, da AppDatabase bereits ein Singleton ist
+    // und Hilt den DAO immer von derselben Datenbankinstanz holt.
+    // Aber es schadet auch nicht.
     fun provideShoppingListDao(appDatabase: AppDatabase): ShoppingListDao {
         return appDatabase.shoppingListDao()
     }
+
+    // Wenn du andere DAOs in deiner AppDatabase definiert hast, füge hier entsprechende @Provides Methoden hinzu:
+    /*
+    @Provides
+    fun provideMyOtherDao(appDatabase: AppDatabase): MyOtherDao {
+        return appDatabase.myOtherDao()
+    }
+    */
 }

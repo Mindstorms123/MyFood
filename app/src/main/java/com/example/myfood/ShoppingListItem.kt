@@ -7,6 +7,7 @@ import androidx.room.PrimaryKey
 data class ShoppingListItem(
     @PrimaryKey(autoGenerate = true) val id: Int = 0,
     val name: String,
+    var brand: String? = null,
     var quantity: String = "1", // Flexibel als String für "1 Packung", "500g", etc.
     var unit: String = "Stk.", // Stück, g, ml, Packung etc.
     var isChecked: Boolean = false,

@@ -16,6 +16,10 @@ interface PantryDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(foodItem: FoodItem)
 
+    // NEU: Methode zum Einfügen einer Liste von FoodItems
+    @Insert(onConflict = OnConflictStrategy.REPLACE) // Oder eine andere passende Strategie
+    suspend fun insertItems(items: List<FoodItem>) // Erwartet eine Liste von FoodItem-Objekten
+
     @Update
     suspend fun update(foodItem: FoodItem)
 

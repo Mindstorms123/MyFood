@@ -1,6 +1,5 @@
 package com.example.myfood.ui.shoppinglist
 
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -11,27 +10,26 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.style.TextDecoration // WIEDER HINZUGEFÜGT
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
-import coil.compose.AsyncImage // Für Bilder von Open Food Facts
+import coil.compose.AsyncImage
 import com.example.myfood.data.openfoodfacts.OFFProduct
 import com.example.myfood.data.shopping.ShoppingListItem
-import androidx.navigation.NavController
-
+import android.util.Log
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalComposeUiApi::class)
 @Composable
 fun ShoppingListScreen(
     viewModel: ShoppingListViewModel = hiltViewModel(),
-    // onNavigateToRecipeDetail: (String) -> Unit // Falls du von hier navigieren willst
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val keyboardController = LocalSoftwareKeyboardController.current
@@ -41,24 +39,27 @@ fun ShoppingListScreen(
             TopAppBar(
                 title = { Text("Einkaufsliste") },
                 actions = {
+                    // Button, um ALLE markierten Items zu verarbeiten
                     if (uiState.items.any { it.isChecked }) {
-                        IconButton(onClick = { viewModel.deleteCheckedItems() }) {
-                            Icon(Icons.Default.DeleteSweep, contentDescription = "Gekaufte löschen")
+                        IconButton(onClick = {
+                            Log.d("ShoppingListScreen", "TopAppBar DoneAll geklickt - rufe transferCheckedItemsToPantryAndClear")
+                            viewModel.transferCheckedItemsToPantryAndClear()
+                        }) {
+                            Icon(Icons.Default.DoneAll, contentDescription = "Gekaufte in Vorrat übertragen & abhaken")
+                        }
+                        // Optional: Button, um alle markierten Items nur zu löschen (ohne Übertrag)
+                        IconButton(onClick = {
+                            Log.d("ShoppingListScreen", "TopAppBar DeleteSweep geklickt - rufe deleteCheckedItems")
+                            viewModel.deleteCheckedItems()
+                        }) {
+                            Icon(Icons.Default.DeleteSweep, contentDescription = "Markierte von Liste löschen")
                         }
                     }
-                    IconButton(onClick = { viewModel.onShowAddItemDialogChanged(true) }) {
+                    IconButton(onClick = { viewModel.onShowAddItemDialogChanged(true, null) }) {
                         Icon(Icons.Default.AddShoppingCart, contentDescription = "Manuell hinzufügen")
                     }
                 }
             )
-        },
-        floatingActionButton = {
-            // Optional: FAB für schnelles manuelles Hinzufügen
-            /*
-            FloatingActionButton(onClick = { viewModel.onShowAddItemDialogChanged(true) }) {
-                Icon(Icons.Filled.Add, "Neues Element")
-            }
-            */
         }
     ) { paddingValues ->
         Column(
@@ -66,7 +67,6 @@ fun ShoppingListScreen(
                 .padding(paddingValues)
                 .fillMaxSize()
         ) {
-            // Suchleiste
             OutlinedTextField(
                 value = uiState.searchQuery,
                 onValueChange = { viewModel.onSearchQueryChanged(it) },
@@ -78,7 +78,7 @@ fun ShoppingListScreen(
                 leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
                 trailingIcon = {
                     if (uiState.searchQuery.isNotEmpty()) {
-                        IconButton(onClick = { viewModel.clearSearchResults() }) {
+                        IconButton(onClick = { viewModel.clearSearchResultsAndQuery() }) {
                             Icon(Icons.Default.Clear, contentDescription = "Suche leeren")
                         }
                     }
@@ -86,11 +86,9 @@ fun ShoppingListScreen(
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                 keyboardActions = KeyboardActions(onSearch = {
                     keyboardController?.hide()
-                    // Die Suche wird automatisch durch debounce ausgelöst
                 })
             )
 
-            // Suchergebnisse oder Einkaufsliste
             if (uiState.isLoadingSearch) {
                 Box(modifier = Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) {
                     CircularProgressIndicator()
@@ -98,7 +96,7 @@ fun ShoppingListScreen(
             } else if (uiState.searchQuery.length > 2 && uiState.searchResults.isNotEmpty()) {
                 Text("Suchergebnisse:", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
                 LazyColumn(modifier = Modifier.weight(1f)) {
-                    items(uiState.searchResults, key = { it.id }) { product ->
+                    items(uiState.searchResults, key = { product -> product.id }) { product ->
                         OffSearchResultItem(
                             product = product,
                             onAddClick = { viewModel.addItemFromOffProduct(product) }
@@ -110,7 +108,6 @@ fun ShoppingListScreen(
             } else if (uiState.errorSearching != null) {
                 Text("Fehler bei der Suche: ${uiState.errorSearching}", color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(16.dp))
             } else {
-                // Einkaufsliste anzeigen
                 if (uiState.items.isEmpty()) {
                     Box(modifier = Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
                         Text("Deine Einkaufsliste ist leer.")
@@ -120,9 +117,14 @@ fun ShoppingListScreen(
                         items(uiState.items, key = { it.id }) { item ->
                             ShoppingListItemRow(
                                 item = item,
-                                onCheckedChange = { viewModel.toggleItemChecked(item) },
-                                onEditClick = { viewModel.onShowEditItemDialog(item) },
-                                onDeleteClick = { viewModel.deleteItem(item) }
+                                // --- HIER DIE ÄNDERUNG ZURÜCK ---
+                                // Ruft jetzt wieder die Funktion zum Umschalten des isChecked-Status auf.
+                                onCheckedChange = {
+                                    Log.d("ShoppingListScreen", "Checkbox für Item '${item.name}' (ID: ${item.id}) geklickt. Rufe toggleItemChecked auf.")
+                                    viewModel.toggleItemChecked(item.id)
+                                },
+                                onEditClick = { viewModel.onShowAddItemDialogChanged(true, item) },
+                                onDeleteClick = { viewModel.deleteItem(item.id) }
                             )
                             Divider()
                         }
@@ -131,13 +133,12 @@ fun ShoppingListScreen(
             }
         }
 
-        // Dialog zum Hinzufügen/Bearbeiten von Elementen
         if (uiState.showAddItemDialog) {
             AddItemDialog(
                 itemToEdit = uiState.itemToEdit,
-                onDismiss = { viewModel.onShowAddItemDialogChanged(false) },
-                onConfirm = { id, name, quantity, unit ->
-                    viewModel.saveEditedItem(id, name, quantity, unit)
+                onDismiss = { viewModel.onShowAddItemDialogChanged(false, null) },
+                onConfirm = { id, name, brand, quantity, unit ->
+                    viewModel.saveShoppingListItem(id, name, brand, quantity, unit)
                 }
             )
         }
@@ -147,39 +148,48 @@ fun ShoppingListScreen(
 @Composable
 fun ShoppingListItemRow(
     item: ShoppingListItem,
-    onCheckedChange: () -> Unit,
+    onCheckedChange: () -> Unit, // Löst jetzt wieder das Umschalten des Hakens aus
     onEditClick: () -> Unit,
     onDeleteClick: () -> Unit
 ) {
+    // --- WIEDERHERGESTELLTE LOGIK FÜR DURCHSTREICHEN ---
+    val textAlpha = if (item.isChecked) 0.6f else 1f
+    val textDecoration = if (item.isChecked) TextDecoration.LineThrough else null
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable { onCheckedChange() }
+            .clickable { onCheckedChange() } // Klick auf ganze Zeile ODER nur Checkbox ändert Status
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Checkbox(
             checked = item.isChecked,
-            onCheckedChange = { onCheckedChange() }
+            onCheckedChange = { onCheckedChange() } // Löst onCheckedChange der Row aus (oder direkt VM-Aufruf)
         )
         Spacer(Modifier.width(16.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = item.name,
-                style = if (item.isChecked) MaterialTheme.typography.bodyLarge.copy(textDecoration = TextDecoration.LineThrough)
-                else MaterialTheme.typography.bodyLarge,
-                color = if (item.isChecked) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                else MaterialTheme.colorScheme.onSurface
+                style = MaterialTheme.typography.bodyLarge.copy(textDecoration = textDecoration), // WIEDER AKTIV
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = textAlpha) // WIEDER AKTIV
             )
+            item.brand?.takeIf { it.isNotBlank() }?.let { brandName ->
+                Text(
+                    text = brandName,
+                    style = MaterialTheme.typography.bodySmall.copy(fontStyle = FontStyle.Italic, textDecoration = textDecoration), // WIEDER AKTIV
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = textAlpha) // WIEDER AKTIV
+                )
+            }
             Text(
                 text = "${item.quantity} ${item.unit}",
-                style = MaterialTheme.typography.bodyMedium,
-                color = if (item.isChecked) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                else MaterialTheme.colorScheme.onSurfaceVariant
+                style = MaterialTheme.typography.bodyMedium.copy(textDecoration = textDecoration), // WIEDER AKTIV
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = textAlpha) // WIEDER AKTIV
             )
         }
         Spacer(Modifier.width(8.dp))
-        IconButton(onClick = onEditClick) {
+        // Bearbeiten-Button deaktivieren, wenn abgehakt, falls gewünscht
+        IconButton(onClick = onEditClick, enabled = !item.isChecked) {
             Icon(Icons.Default.Edit, contentDescription = "Bearbeiten")
         }
         IconButton(onClick = onDeleteClick) {
@@ -187,6 +197,9 @@ fun ShoppingListItemRow(
         }
     }
 }
+
+// OffSearchResultItem und AddItemDialog bleiben unverändert von deiner letzten Version.
+// Stelle sicher, dass sie hier sind. Ich füge sie der Vollständigkeit halber ein.
 
 @Composable
 fun OffSearchResultItem(
@@ -197,7 +210,7 @@ fun OffSearchResultItem(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 4.dp)
-            .clickable { onAddClick() }, // Mache die ganze Karte klickbar
+            .clickable { onAddClick() },
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Row(
@@ -224,15 +237,15 @@ fun OffSearchResultItem(
     }
 }
 
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AddItemDialog(
     itemToEdit: ShoppingListItem?,
     onDismiss: () -> Unit,
-    onConfirm: (id: Int, name: String, quantity: String, unit: String) -> Unit
+    onConfirm: (id: Int, name: String, brand: String?, quantity: String, unit: String) -> Unit
 ) {
     var name by remember { mutableStateOf(itemToEdit?.name ?: "") }
+    var brand by remember { mutableStateOf(itemToEdit?.brand ?: "") }
     var quantity by remember { mutableStateOf(itemToEdit?.quantity ?: "1") }
     var unit by remember { mutableStateOf(itemToEdit?.unit ?: "Stk.") }
     val isEditMode = itemToEdit != null
@@ -241,27 +254,34 @@ fun AddItemDialog(
         onDismissRequest = onDismiss,
         title = { Text(if (isEditMode) "Element bearbeiten" else "Neues Element hinzufügen") },
         text = {
-            Column {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it },
-                    label = { Text("Name") },
+                    label = { Text("Name*") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    isError = name.isBlank() && isEditMode
+                )
+                OutlinedTextField(
+                    value = brand,
+                    onValueChange = { brand = it },
+                    label = { Text("Hersteller (optional)") },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true
                 )
-                Spacer(Modifier.height(8.dp))
-                Row {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedTextField(
                         value = quantity,
-                        onValueChange = { quantity = it },
-                        label = { Text("Menge") },
-                        modifier = Modifier.weight(1f)
+                        onValueChange = { quantity = it.filter { char -> char.isDigit() || char == ',' || char == '.' } },
+                        label = { Text("Menge*") },
+                        modifier = Modifier.weight(1f),
+                        keyboardOptions = KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number)
                     )
-                    Spacer(Modifier.width(8.dp))
                     OutlinedTextField(
                         value = unit,
                         onValueChange = { unit = it },
-                        label = { Text("Einheit") },
+                        label = { Text("Einheit*") },
                         modifier = Modifier.weight(1f)
                     )
                 }
@@ -270,11 +290,12 @@ fun AddItemDialog(
         confirmButton = {
             Button(
                 onClick = {
-                    if (name.isNotBlank()) {
-                        onConfirm(itemToEdit?.id ?: 0, name, quantity, unit)
+                    if (name.isNotBlank() && quantity.isNotBlank() && unit.isNotBlank()) {
+                        onConfirm(itemToEdit?.id ?: 0, name, brand.takeIf { it.isNotBlank() }, quantity, unit)
+                        onDismiss()
                     }
                 },
-                enabled = name.isNotBlank()
+                enabled = name.isNotBlank() && quantity.isNotBlank() && unit.isNotBlank()
             ) {
                 Text("Speichern")
             }
