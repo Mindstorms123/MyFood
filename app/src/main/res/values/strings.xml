@@ -2,4 +2,31 @@
     <string name="app_name">My Food</string>
     <string name="notification_channel_name">Ablaufwarnungen</string>
     <string name="notification_channel_description">Benachrichtigungen für bald ablaufende Produkte</string>
+
+    <!-- HINZUGEFÜGT: Strings für ExpiryCheckWorker Benachrichtigungsinhalte -->
+    <string name="notification_no_expiry_date">Kein Ablaufdatum hinterlegt.</string>
+    <string name="notification_expired_already">Ist bereits abgelaufen!</string>
+    <string name="notification_expires_today">Läuft HEUTE ab!</string>
+    <string name="notification_expires_tomorrow">Läuft MORGEN ab!</string>
+    <string name="notification_expires_in_days">Läuft in %1$d Tagen ab.</string>
+    <string name="notification_unnamed_product">Unbenanntes Produkt</string>
+
+    <!-- HINZUGEFÜGT: Strings für die Zusammenfassungs-Benachrichtigung -->
+    <string name="notification_summary_title">%1$d Produkte laufen bald ab</string>
+    <string name="notification_summary_text">Überprüfe deine Vorräte.</string> <!-- Für ältere Android-Versionen -->
+    <string name="notification_summary_content_text">Überprüfe deine Vorräte für Details.</string>
+
+    <!-- HINZUGEFÜGT: Strings für die InboxStyle-Zeilen in der Zusammenfassung -->
+    <string name="notification_no_expiry_date_short">Kein MHD</string>
+    <string name="notification_today_short">Heute</string>
+    <string name="notification_tomorrow_short">Morgen</string>
+    <string name="notification_days_short">%1$d Tg.</string>
+    <string name="notification_summary_more_items">… und %1$d weitere.</string>
+
+    <!-- HINZUGEFÜGT: Plurals für die Anzeige der Vorlauftage im SettingsScreen -->
+    <plurals name="notification_lead_time_days">
+        <item quantity="one">Benachrichtigung %d Tag vorher senden</item>
+        <item quantity="other">Benachrichtigung %d Tage vorher senden</item>
+    </plurals>
+
 </resources>

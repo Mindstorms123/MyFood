@@ -8,7 +8,7 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
-import dagger.hilt.android.qualifiers.ApplicationContext // Wenn du Hilt verwendest
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.map
@@ -16,43 +16,99 @@ import java.io.IOException
 import javax.inject.Inject
 import javax.inject.Singleton
 
-// Diese Zeile erstellt die DataStore-Instanz auf Context-Ebene
-val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "user_settings")
+// Datenklasse für die kombinierten Einstellungen
+data class NotificationSettings(
+    val leadTimeDays: Int, // Wie viele Tage im Voraus benachrichtigen
+    val notificationHour: Int, // Stunde der Benachrichtigung (0-23)
+    val notificationMinute: Int // Minute der Benachrichtigung (0-59)
+)
+
+// Diese Zeile erstellt die DataStore-Instanz auf Context-Ebene.
+// Der Name "user_settings" wird beibehalten, da er nun mehrere Benutzereinstellungen enthält.
+val Context.userSettingsDataStore: DataStore<Preferences> by preferencesDataStore(name = "user_settings")
+// Hinweis: Ich habe den Delegatennamen von `dataStore` zu `userSettingsDataStore` geändert,
+// um Klarheit zu schaffen, dass dies der spezifische DataStore für Benutzereinstellungen ist.
+// Du kannst ihn aber auch `dataStore` lassen, wenn du das bevorzugst und die Logik anpasst.
 
 @Singleton // Wichtig für Hilt, stellt sicher, dass es nur eine Instanz gibt
 class UserPreferencesRepository @Inject constructor(
     @ApplicationContext private val context: Context // Hilt injiziert den ApplicationContext
 ) {
 
+    // Die Schlüssel für die Preferences an einem Ort zusammenfassen
     private object PreferencesKeys {
-        // Ein Schlüssel für die Einstellung der Erinnerungstage
+        // Bestehender Schlüssel für die Einstellung der Erinnerungstage
         val REMINDER_DAYS_AHEAD = intPreferencesKey("reminder_days_ahead")
+
+        // Neue Schlüssel für die Benachrichtigungszeit
+        val NOTIFICATION_TIME_HOUR = intPreferencesKey("notification_time_hour")
+        val NOTIFICATION_TIME_MINUTE = intPreferencesKey("notification_time_minute")
     }
 
     private val TAG: String = "UserPreferencesRepo"
 
-    // Dieser Flow gibt die gespeicherte Anzahl an Tagen aus
-    // oder einen Standardwert (hier 7), falls nichts gespeichert ist.
-    val reminderDaysFlow: Flow<Int> = context.dataStore.data
+    // Standardwerte für die Einstellungen
+    companion object {
+        const val DEFAULT_REMINDER_DAYS_AHEAD = 3 // Standard: 3 Tage vorher
+        const val DEFAULT_NOTIFICATION_HOUR = 2   // Standard: 2 Uhr
+        const val DEFAULT_NOTIFICATION_MINUTE = 0 // Standard: 0 Minuten
+    }
+
+    // Dieser Flow gibt die kombinierten NotificationSettings aus
+    val notificationSettingsFlow: Flow<NotificationSettings> = context.userSettingsDataStore.data
         .catch { exception ->
             // Fehlerbehandlung beim Lesen der Preferences
             if (exception is IOException) {
-                Log.e(TAG, "Error reading preferences.", exception)
-                emit(emptyPreferences()) // Bei Fehler leere Preferences ausgeben
+                Log.e(TAG, "Error reading user preferences.", exception)
+                // Bei Fehler ein NotificationSettings-Objekt mit Standardwerten ausgeben
+                emit(
+                    // Hier direkt ein leeres Preferences-Objekt übergeben,
+                    // der Mapper kümmert sich um die Standardwerte
+                    emptyPreferences()
+                )
             } else {
                 throw exception // Andere Fehler weiterwerfen
             }
         }
         .map { preferences ->
-            // Den Wert für unseren Schlüssel auslesen, oder den Standardwert 7 verwenden
-            preferences[PreferencesKeys.REMINDER_DAYS_AHEAD] ?: 7
+            // Die gelesenen Preferences in ein NotificationSettings-Objekt umwandeln
+            NotificationSettings(
+                leadTimeDays = preferences[PreferencesKeys.REMINDER_DAYS_AHEAD] ?: DEFAULT_REMINDER_DAYS_AHEAD,
+                notificationHour = preferences[PreferencesKeys.NOTIFICATION_TIME_HOUR] ?: DEFAULT_NOTIFICATION_HOUR,
+                notificationMinute = preferences[PreferencesKeys.NOTIFICATION_TIME_MINUTE] ?: DEFAULT_NOTIFICATION_MINUTE
+            )
         }
 
-    // Funktion zum Aktualisieren der Erinnerungstage
+    // Funktion zum Aktualisieren der Erinnerungstage (Vorlaufzeit)
     suspend fun updateReminderDays(days: Int) {
-        context.dataStore.edit { preferences ->
+        context.userSettingsDataStore.edit { preferences ->
             preferences[PreferencesKeys.REMINDER_DAYS_AHEAD] = days
             Log.d(TAG, "Reminder days preference updated to: $days")
         }
     }
+
+    // Funktion zum Aktualisieren der Benachrichtigungszeit (Stunde und Minute)
+    suspend fun updateNotificationTime(hour: Int, minute: Int) {
+        context.userSettingsDataStore.edit { preferences ->
+            preferences[PreferencesKeys.NOTIFICATION_TIME_HOUR] = hour
+            preferences[PreferencesKeys.NOTIFICATION_TIME_MINUTE] = minute
+            Log.d(TAG, "Notification time preference updated to: $hour:$minute")
+        }
+    }
+
+    // --- Optional: Behalte den alten Flow, falls er noch irgendwo direkt verwendet wird ---
+    // --- Ansonsten kann dieser entfernt werden, wenn alles auf notificationSettingsFlow umgestellt ist ---
+    val reminderDaysFlow: Flow<Int> = context.userSettingsDataStore.data
+        .catch { exception ->
+            if (exception is IOException) {
+                Log.e(TAG, "Error reading reminder_days_ahead preference.", exception)
+                emit(emptyPreferences())
+            } else {
+                throw exception
+            }
+        }
+        .map { preferences ->
+            preferences[PreferencesKeys.REMINDER_DAYS_AHEAD] ?: DEFAULT_REMINDER_DAYS_AHEAD
+        }
 }
+
