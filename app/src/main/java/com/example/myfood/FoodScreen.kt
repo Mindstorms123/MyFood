@@ -123,7 +123,7 @@ fun FoodScreen(
     }
 
     Scaffold(
-        topBar = { TopAppBar(title = { Text("Lebensmittelliste") }) },
+        topBar = { TopAppBar(title = { Text("Lebensmittelliste") },windowInsets = WindowInsets(0.dp)) },
         floatingActionButton = {
             Row(
                 modifier = Modifier.padding(end = 16.dp),

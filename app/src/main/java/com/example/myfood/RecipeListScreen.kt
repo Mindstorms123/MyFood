@@ -51,7 +51,7 @@ fun RecipeListScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(title = { Text("Rezepte") })
+            TopAppBar(title = { Text("Rezepte")},windowInsets = WindowInsets(0.dp))
         }
     ) { paddingValues ->
         LazyColumn(

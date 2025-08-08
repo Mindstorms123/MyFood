@@ -1,6 +1,6 @@
 
 [versions]
-agp = "8.10.1"
+agp = "8.12.0"
 kotlin = "2.1.21" # Dies ist die Kotlin-Version deines Projekts
 # KSP Version muss zu deiner Kotlin-Version passen.
 # Für Kotlin 2.0.21 ist eine passende KSP-Version z.B. "2.0.21-1.0.18" (bitte prüfen!)

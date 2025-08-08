@@ -37,7 +37,7 @@ fun ShoppingListScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Einkaufsliste") },
+                title = { Text("Einkaufsliste") },windowInsets = WindowInsets(0.dp),
                 actions = {
                     // Button, um ALLE markierten Items zu verarbeiten
                     if (uiState.items.any { it.isChecked }) {
