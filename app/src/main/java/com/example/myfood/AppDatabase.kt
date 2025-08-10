@@ -1,33 +1,55 @@
 package com.example.myfood.data // Or your appropriate package
 
+import android.content.Context
 import androidx.room.Database
+import androidx.room.Room
 import androidx.room.RoomDatabase
+import androidx.room.TypeConverters // <<< NEUER IMPORT
+import com.example.myfood.data.local.Converters // <<< NEUER IMPORT (passe den Pfad an, falls nötig)
+import com.example.myfood.data.local.RecipeDao
+import com.example.myfood.data.model.Recipe
 import com.example.myfood.data.shopping.ShoppingListDao
 import com.example.myfood.data.shopping.ShoppingListItem
 
-// --- KORREKTUR: Version erhöht ---
-@Database(entities = [ShoppingListItem::class], version = 2, exportSchema = false) // Add other entities if you have them
+@Database(
+    entities = [
+        ShoppingListItem::class,
+        Recipe::class
+        // Füge hier weitere Entitäten hinzu, falls vorhanden
+    ],
+    version = 2, // Behalte die Version bei oder erhöhe sie, falls nötig
+    exportSchema = false
+)
+@TypeConverters(Converters::class) // <<< HIER DIE TYPECONVERTERS REGISTRIEREN
 abstract class AppDatabase : RoomDatabase() {
     abstract fun shoppingListDao(): ShoppingListDao
-    // Add other DAOs here if you have them
+    abstract fun recipeDao(): RecipeDao
 
-    // --- OPTIONAL aber EMPFOHLEN für die Entwicklung, wenn du noch keine Migrationsstrategie hast ---
-    // Wenn du deine Datenbankinstanz erstellst, füge .fallbackToDestructiveMigration() hinzu,
-    // damit die App nicht abstürzt, wenn du das Schema änderst und nur die Version erhöhst.
-    // Beispiel (an der Stelle, wo du die Datenbank baust, z.B. in einem Hilt Modul):
-    //
-    // @Provides
-    // @Singleton
-    // fun provideAppDatabase(@ApplicationContext appContext: Context): AppDatabase {
-    //     return Room.databaseBuilder(
-    //         appContext,
-    //         AppDatabase::class.java,
-    //         "my_food_database" // Dein Datenbankname
-    //     )
-    //     .fallbackToDestructiveMigration() // WICHTIG: Löscht alte Daten bei Versionserhöhung ohne Migration
-    //     .build()
-    // }
-    //
-    // Wenn du exportSchema = true verwenden möchtest (empfohlen für später), stelle sicher, dass du
-    // auch die Konfiguration in deinem build.gradle für room.schemaLocation setzt.
+    // ... (der Rest deiner Klasse, wie das companion object, kann bleiben,
+    //      aber wie besprochen, überlege dir dessen Notwendigkeit bei Verwendung von Hilt)
+
+    companion object {
+        @Volatile
+        private var INSTANCE: AppDatabase? = null
+
+        fun getDatabase(context: Context): AppDatabase {
+            return INSTANCE ?: synchronized(this) {
+                val instance = Room.databaseBuilder(
+                    context.applicationContext,
+                    AppDatabase::class.java,
+                    "myfood_database" // Name der Datenbankdatei
+                )
+                    // WICHTIG: Wenn du diese manuelle Instanzerzeugung verwendest und nicht Hilt für die DB-Instanz,
+                    // füge hier .fallbackToDestructiveMigration() hinzu, falls du Schemaänderungen erwartest.
+                    // UND AUCH .addTypeConverters(Converters()) hier, wenn du das Companion Object verwendest
+                    // und nicht Hilt für die Instanzerzeugung.
+                    // .fallbackToDestructiveMigration()
+                    // .addTypeConverters(Converters()) // Beispiel
+                    .build()
+                INSTANCE = instance
+                instance
+            }
+        }
+    }
 }
+

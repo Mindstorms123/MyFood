@@ -150,4 +150,10 @@ dependencies {
 
     //notification-builder
     implementation ("androidx.core:core-ktx:1.13.1")
+
+    //Markdown-Parsing-Bibliothek
+    implementation("org.commonmark:commonmark:0.21.0")
+
+    //gson converter
+    implementation("com.google.code.gson:gson:2.10.1")
 }

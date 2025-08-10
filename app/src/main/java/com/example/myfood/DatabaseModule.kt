@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.room.Room
 import com.example.myfood.data.AppDatabase
 import com.example.myfood.data.shopping.ShoppingListDao
+import com.example.myfood.data.local.RecipeDao
 // Importiere hier andere DAOs, falls deine AppDatabase mehr als nur das ShoppingListDao hat
 // import com.example.myfood.data.pantry.PantryDao // Beispiel, falls du es verwendest
 import dagger.Module
@@ -44,4 +45,9 @@ object DatabaseModule {
         return appDatabase.myOtherDao()
     }
     */
+
+    @Provides
+    fun provideRecipeDao(appDatabase: AppDatabase): RecipeDao {
+        return appDatabase.recipeDao()
+    }
 }

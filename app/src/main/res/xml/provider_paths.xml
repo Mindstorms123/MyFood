@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <cache-path name="cache" path="." /> <!-- Für context.cacheDir -->
+    <files-path name="files" path="." /> <!-- Für context.filesDir -->
+    <!-- Füge hier weitere Pfade hinzu, falls nötig -->
+</paths>

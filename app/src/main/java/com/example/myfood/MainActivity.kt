@@ -5,20 +5,17 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import android.util.Log
-// import android.widget.Toast // Nicht mehr direkt in AppNavigation für den FAB gebraucht
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.RequiresApi
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.BrokenImage // <<< HINZUGEFÜGT für Icon-Fallback
-// import androidx.compose.material.icons.filled.PlayArrow // Nicht mehr für den FAB gebraucht
+import androidx.compose.material.icons.filled.BrokenImage
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
-// import androidx.compose.ui.platform.LocalContext // Nicht mehr direkt in AppNavigation für den FAB gebraucht
 import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModelProvider
@@ -27,25 +24,26 @@ import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavType
 import androidx.navigation.compose.*
 import androidx.navigation.navArgument
-// import androidx.work.OneTimeWorkRequestBuilder // Nicht mehr für den FAB gebraucht
-// import androidx.work.WorkManager // Nicht mehr für den FAB gebraucht
-import com.example.myfood.navigation.Screen // Stelle sicher, dass Screen.Settings hier definiert ist
+import com.example.myfood.navigation.Screen // Dein Navigations-Objekt
+
+// --- WICHTIGE IMPORTE - BITTE PFADE ÜBERPRÜFEN UND ANPASSEN ---
+import com.example.myfood.FoodScreen // Pfad zu deiner FoodScreen.kt Composable
+import com.example.myfood.ui.recipe.AddEditRecipeScreen
 import com.example.myfood.ui.recipe.RecipeDetailScreen
 import com.example.myfood.ui.recipe.RecipeListScreen
 import com.example.myfood.ui.recipe.RecipeViewModel
 import com.example.myfood.ui.shoppinglist.ShoppingListScreen
-import com.example.myfood.ui.EditItemScreen
-// Import für deinen neuen SettingsScreen und ggf. ViewModel
-import com.example.myfood.ui.settings.SettingsScreen // <<< HINZUGEFÜGT (Passe Pfad an)
-// import com.example.myfood.ui.settings.SettingsViewModel // Wird ggf. direkt im Composable geholt
+// Wenn dein Screen für das Bearbeiten von Food-Items 'EditItemScreen' heißt:
+import com.example.myfood.ui.EditItemScreen // Pfad zu deiner EditItemScreen.kt Composable
+// Wenn dein Screen 'EditFoodItemScreen' heißt (passend zu Navigation.kt):
+// import com.example.myfood.ui.EditFoodItemScreen // Alternativer Import
+import com.example.myfood.ui.settings.SettingsScreen
 import com.example.myfood.ui.theme.MyFoodTheme
-// import com.example.myfood.workers.ExpiryCheckWorker // Nicht mehr für den FAB gebraucht
 import dagger.hilt.android.AndroidEntryPoint
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
 
-    // --- Start: Code für Benachrichtigungsberechtigung ---
     private val requestPermissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted: Boolean ->
             if (isGranted) {
@@ -75,16 +73,11 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
-    // --- Ende: Code für Benachrichtigungsberechtigung ---
 
-    @RequiresApi(Build.VERSION_CODES.O)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         askNotificationPermission()
 
-        // Beachte: FoodViewModelFactory ist nicht Hilt-konform.
-        // Wenn du Hilt durchgängig nutzt, solltest du FoodViewModel auch über Hilt bereitstellen.
-        // Für dieses Beispiel lasse ich es so, wie es war, aber zur Kenntnisnahme.
         val foodViewModelFactory = FoodViewModelFactory(application)
         val foodViewModel = ViewModelProvider(this, foodViewModelFactory)[FoodViewModel::class.java]
 
@@ -99,22 +92,21 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-@RequiresApi(Build.VERSION_CODES.O)
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AppNavigation(
     foodViewModel: FoodViewModel,
     recipeViewModel: RecipeViewModel
-    // Das SettingsViewModel wird direkt im Composable-Block für Settings geholt, falls mit Hilt
 ) {
     val navController = rememberNavController()
+    // --- ANPASSUNG HIER ---
+    // Verwende die Namen aus deiner Navigation.kt (z.B. Screen.RecipeList statt Screen.Recipes)
     val items = listOf(
         Screen.FoodList,
-        Screen.Recipes,
+        Screen.RecipeList, // Geändert von Screen.Recipes
         Screen.ShoppingList,
-        Screen.Settings // <<< HIER HINZUGEFÜGT
+        Screen.Settings
     )
-    // val context = LocalContext.current // Nicht mehr hier benötigt, wenn FAB entfernt ist
 
     Scaffold(
         bottomBar = {
@@ -125,7 +117,7 @@ fun AppNavigation(
                     NavigationBarItem(
                         icon = {
                             Icon(
-                                imageVector = screen.icon ?: Icons.Filled.BrokenImage, // Fallback-Icon
+                                imageVector = screen.icon ?: Icons.Filled.BrokenImage,
                                 contentDescription = screen.title
                             )
                         },
@@ -143,62 +135,89 @@ fun AppNavigation(
                     )
                 }
             }
-        },
-        // FAB entfernt, da er nicht mehr benötigt wird oder an anderer Stelle platziert werden kann.
+        }
     ) { innerPadding ->
         NavHost(
             navController = navController,
-            startDestination = Screen.FoodList.route, // Dein gewünschter Startbildschirm
+            startDestination = Screen.FoodList.route,
             modifier = Modifier.padding(innerPadding)
         ) {
             composable(Screen.FoodList.route) {
-                FoodScreen(
+                FoodScreen( // Stelle sicher, dass FoodScreen korrekt importiert ist
                     navController = navController,
-                    viewModel = foodViewModel // foodViewModel wird übergeben
-                )
-            }
-            composable(Screen.Recipes.route) {
-                RecipeListScreen(
-                    navController = navController,
-                    foodViewModel = foodViewModel, // foodViewModel wird übergeben
-                    recipeViewModel = recipeViewModel // recipeViewModel wird übergeben
-                )
-            }
-            composable(
-                route = Screen.RecipeDetail.route,
-                arguments = listOf(navArgument("recipeId") { type = NavType.StringType })
-            ) { backStackEntry ->
-                val recipeId = backStackEntry.arguments?.getString("recipeId")
-                if (recipeId != null) {
-                    RecipeDetailScreen(
-                        recipeId = recipeId,
-                        navController = navController,
-                        recipeViewModel = recipeViewModel // recipeViewModel wird übergeben
-                    )
-                } else {
-                    Text("Fehler: Rezept-ID nicht gefunden.") // Fehlerbehandlung
-                }
-            }
-            composable(Screen.ShoppingList.route) {
-                ShoppingListScreen() // Annahme: ShoppingListScreen existiert und holt ggf. sein ViewModel selbst
-            }
-            composable(Screen.EditItemScreen.route) { // Sicherstellen, dass die Route mit Screen.EditItemScreen.route übereinstimmt
-                EditItemScreen(
-                    foodViewModel = foodViewModel, // foodViewModel wird übergeben
-                    onItemSaved = {
-                        navController.popBackStack() // Zurück zum vorherigen Bildschirm
-                    }
+                    viewModel = foodViewModel
                 )
             }
 
-            // --- NEUER COMPOSABLE-BLOCK FÜR EINSTELLUNGEN ---
-            composable(Screen.Settings.route) {
-                SettingsScreen(
-                    // viewModel = hiltViewModel() // So würdest du es mit Hilt machen
-                    // Wenn SettingsScreen sein ViewModel nicht über Parameter erwartet,
-                    // sondern intern mit hiltViewModel() holt, dann reicht:
-                    // SettingsScreen()
+            // --- ANPASSUNG HIER ---
+            // Verwende die Route aus deiner Navigation.kt (z.B. Screen.RecipeList.route)
+            composable(Screen.RecipeList.route) { // Geändert von Screen.Recipes.route
+                RecipeListScreen(
+                    navController = navController,
+                    // foodViewModel = foodViewModel, // Entfernt, da Fehler "No parameter with name 'foodViewModel' found"
+                    // Füge es hinzu, wenn dein RecipeListScreen diesen Parameter hat.
+                    recipeViewModel = recipeViewModel
                 )
+            }
+
+            composable(
+                route = Screen.RecipeDetail.route,
+                arguments = listOf(navArgument(Screen.RecipeDetail.NAV_ARGUMENT_RECIPE_ID) { // "recipeId"
+                    type = NavType.StringType // Beibehaltung von StringType für RecipeDetail
+                })
+            ) { backStackEntry ->
+                val recipeId = backStackEntry.arguments?.getString(Screen.RecipeDetail.NAV_ARGUMENT_RECIPE_ID)
+                if (recipeId != null) {
+                    RecipeDetailScreen(
+                        recipeId = recipeId, // Übergib String
+                        navController = navController,
+                        recipeViewModel = recipeViewModel
+                    )
+                } else {
+                    Text("Fehler: Rezept-ID nicht gefunden.")
+                }
+            }
+
+            composable(
+                route = Screen.AddEditRecipe.route,
+                arguments = listOf(
+                    navArgument(Screen.AddEditRecipe.NAV_ARGUMENT_RECIPE_ID) { // "recipeId"
+                        type = NavType.LongType
+                        defaultValue = 0L
+                    }
+                )
+            ) { backStackEntry ->
+                val recipeIdArg = backStackEntry.arguments?.getLong(Screen.AddEditRecipe.NAV_ARGUMENT_RECIPE_ID)
+                AddEditRecipeScreen(
+                    navController = navController,
+                    recipeId = if (recipeIdArg == 0L) null else recipeIdArg,
+                    viewModel = recipeViewModel
+                )
+            }
+
+            composable(Screen.ShoppingList.route) {
+                ShoppingListScreen()
+            }
+
+            // --- ANPASSUNG HIER ---
+            // Verwende die Route und den Screen-Namen aus deiner Navigation.kt
+            // Wenn Navigation.kt Screen.EditFoodItem hat, dann Screen.EditFoodItem.route
+            // und der Composable-Aufruf sollte EditFoodItemScreen sein (oder wie auch immer dein Composable heißt)
+            composable(Screen.EditFoodItem.route) { // Angenommen, es ist Screen.EditFoodItem in Navigation.kt
+                // und dein Composable heißt EditItemScreen
+                EditItemScreen( // Stelle sicher, dass EditItemScreen korrekt importiert ist
+                    // Falls dein Composable EditFoodItemScreen heißt, ändere den Namen hier.
+                    foodViewModel = foodViewModel,
+                    onItemSaved = {
+                        navController.popBackStack()
+                    }
+                )
+                // Wenn Screen.EditFoodItem Argumente benötigt (z.B. foodItemId), musst du hier
+                // den arguments-Block hinzufügen, ähnlich wie bei AddEditRecipeScreen.
+            }
+
+            composable(Screen.Settings.route) {
+                SettingsScreen()
             }
         }
     }

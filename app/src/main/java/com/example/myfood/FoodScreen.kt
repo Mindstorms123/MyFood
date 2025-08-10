@@ -88,7 +88,6 @@ data class PantryProductResponse(
     val product: OFFProduct? = null
 )
 
-@RequiresApi(Build.VERSION_CODES.O)
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterialApi::class)
 @Composable
 fun FoodScreen(
@@ -188,7 +187,7 @@ fun FoodScreen(
                                 // scannedProductForEditing auf null setzen.
                                 viewModel.setItemToEdit(item)
                                 // 2. Navigiere zum EditScreen.
-                                navController.navigate(Screen.EditItemScreen.route)
+                                navController.navigate(Screen.EditFoodItem.route)
                             },
                             onQuantityIncrease = { viewModel.updateItemQuantity(index, item.quantity + 1) },
                             onQuantityDecrease = { viewModel.updateItemQuantity(index, item.quantity - 1) }
@@ -226,7 +225,7 @@ fun FoodScreen(
                             // itemToEdit auf null setzen.
                             viewModel.setScannedProductForEditing(productData)
                             // 2. Navigiere zum EditScreen.
-                            navController.navigate(Screen.EditItemScreen.route)
+                            navController.navigate(Screen.EditFoodItem.route)
                         } else {
                             Log.w("FoodScreen", "Produkt für Barcode '$barcode' nicht gefunden. Füge manuell hinzu.")
                             // Produkt nicht gefunden: Füge ein einfaches Item hinzu oder zeige eine Meldung.
@@ -241,7 +240,6 @@ fun FoodScreen(
     }
 }
 
-@RequiresApi(Build.VERSION_CODES.O)
 @Composable
 fun FoodItemEntry(
     item: FoodItem,
@@ -302,7 +300,6 @@ fun QuantityControl(
     }
 }
 
-@RequiresApi(Build.VERSION_CODES.O)
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AddFoodDialogWithExpiry(
