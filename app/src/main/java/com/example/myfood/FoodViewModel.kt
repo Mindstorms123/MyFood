@@ -1,10 +1,11 @@
 package com.example.myfood
 
 import android.app.Application
+import android.util.Log // Für Logging hinzugefügt
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
-import androidx.compose.runtime.mutableStateListOf // Beibehalten für interne Logik falls nötig
+import androidx.compose.runtime.mutableStateListOf
 import androidx.lifecycle.viewModelScope
 import com.example.myfood.data.openfoodfacts.OFFProduct
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -15,23 +16,19 @@ import kotlinx.coroutines.launch
 import java.time.LocalDate
 
 class FoodViewModel(application: Application) : AndroidViewModel(application) {
-    // Interner MutableStateList, wenn du ihn weiterhin für andere Zwecke (z.B. direkte Compose-Beobachtung) nutzt
+
     private val _foodItemsInternal = mutableStateListOf<FoodItem>()
-    // Öffentliche, unveränderliche Liste (bleibt, um bestehende Nutzung nicht zu brechen, wird aber vom StateFlow abgeleitet)
-    // Diese wird weniger relevant, wenn alles über StateFlow läuft.
-    val foodItems: List<FoodItem>
-        get() = _foodItemsStateFlow.value
 
-
-    // Neuer StateFlow für die UI-Beobachtung (z.B. in RecipeDetailScreen)
     private val _foodItemsStateFlow = MutableStateFlow<List<FoodItem>>(emptyList())
     val foodItemsStateFlow: StateFlow<List<FoodItem>> = _foodItemsStateFlow.asStateFlow()
 
-    // Für das temporäre Halten des gescannten Produkts zur Bearbeitung
+    // Für die UI, die keinen Flow direkt konsumiert (optional, aber kann nützlich sein)
+    val foodItems: List<FoodItem>
+        get() = _foodItemsStateFlow.value
+
     private val _scannedProductForEditing = MutableStateFlow<OFFProduct?>(null)
     val scannedProductForEditing: StateFlow<OFFProduct?> = _scannedProductForEditing.asStateFlow()
 
-    // Für das temporäre Halten eines bestehenden FoodItem zur Bearbeitung
     private val _itemToEdit = MutableStateFlow<FoodItem?>(null)
     val itemToEdit: StateFlow<FoodItem?> = _itemToEdit.asStateFlow()
 
@@ -40,23 +37,23 @@ class FoodViewModel(application: Application) : AndroidViewModel(application) {
             FoodStore.getFoodList(application).collectLatest { loadedItems ->
                 _foodItemsInternal.clear()
                 _foodItemsInternal.addAll(loadedItems)
-                _foodItemsStateFlow.value = loadedItems // StateFlow aktualisieren
+                _foodItemsStateFlow.value = _foodItemsInternal.toList() // StateFlow mit der geladenen Liste initialisieren
             }
         }
     }
 
     fun setScannedProductForEditing(product: OFFProduct?) {
         _scannedProductForEditing.value = product
-        _itemToEdit.value = null
+        _itemToEdit.value = null // Stelle sicher, dass nur ein Bearbeitungsmodus aktiv ist
     }
 
     fun setItemToEdit(item: FoodItem?) {
         _itemToEdit.value = item
-        _scannedProductForEditing.value = null
+        _scannedProductForEditing.value = null // Stelle sicher, dass nur ein Bearbeitungsmodus aktiv ist
     }
 
     fun confirmAndAddEditedScannedItem(
-        originalProductId: String,
+        originalProductId: String, // Dies ist die ID des OFFProduct (Barcode)
         name: String,
         brand: String?,
         quantity: Int,
@@ -65,18 +62,18 @@ class FoodViewModel(application: Application) : AndroidViewModel(application) {
         val newItem = FoodItem(
             name = name,
             brand = brand?.takeIf { it.isNotBlank() },
-            quantity = quantity.coerceAtLeast(1),
-            openFoodFactsId = originalProductId,
+            quantity = quantity.coerceAtLeast(1), // Menge sollte mindestens 1 sein
+            openFoodFactsId = originalProductId, // Speichere den Barcode
             expiryDate = expiryDate
         )
-        _foodItemsInternal.add(newItem) // _foodItemsInternal aktuell halten
-        _foodItemsStateFlow.value = _foodItemsInternal.toList() // StateFlow mit neuer Liste aktualisieren
+        _foodItemsInternal.add(newItem)
+        _foodItemsStateFlow.value = _foodItemsInternal.toList()
         saveItems()
-        _scannedProductForEditing.value = null
+        clearEditingStates() // Bearbeitungsstatus nach Hinzufügen zurücksetzen
     }
 
     fun updateExistingFoodItem(
-        itemId: String,
+        itemId: String, // ID des FoodItem, das aktualisiert wird
         newName: String,
         newBrand: String?,
         newQuantity: Int,
@@ -87,78 +84,72 @@ class FoodViewModel(application: Application) : AndroidViewModel(application) {
             _foodItemsInternal[itemIndex] = _foodItemsInternal[itemIndex].copy(
                 name = newName,
                 brand = newBrand?.takeIf { it.isNotBlank() },
-                quantity = newQuantity.coerceAtLeast(1),
+                quantity = newQuantity.coerceAtLeast(0), // Menge kann 0 sein (z.B. "aufgebraucht")
                 expiryDate = newExpiryDate
             )
-            _foodItemsStateFlow.value = _foodItemsInternal.toList() // StateFlow aktualisieren
+            _foodItemsStateFlow.value = _foodItemsInternal.toList()
             saveItems()
+        } else {
+            Log.w("FoodViewModel", "updateExistingFoodItem: Item mit ID $itemId nicht gefunden.")
         }
-        _itemToEdit.value = null
+        clearEditingStates() // Bearbeitungsstatus nach Update zurücksetzen
     }
 
     fun addManualItem(name: String, brand: String? = null, quantity: Int = 1, expiryDate: LocalDate? = null) {
         val newItem = FoodItem(
             name = name,
-            brand = brand,
+            brand = brand?.takeIf { it.isNotBlank() },
             quantity = quantity.coerceAtLeast(0),
             expiryDate = expiryDate
         )
-        _foodItemsInternal.add(newItem) // _foodItemsInternal aktuell halten
-        _foodItemsStateFlow.value = _foodItemsInternal.toList() // StateFlow aktualisieren
+        _foodItemsInternal.add(newItem)
+        _foodItemsStateFlow.value = _foodItemsInternal.toList()
         saveItems()
     }
 
-    fun removeItem(index: Int) { // Index bezieht sich hier auf _foodItemsInternal
-        if (index in _foodItemsInternal.indices) {
-            val item = _foodItemsInternal.removeAt(index) // _foodItemsInternal aktuell halten
-            _foodItemsStateFlow.value = _foodItemsInternal.toList() // StateFlow aktualisieren
+    fun removeItemById(itemId: String) {
+        val itemIndex = _foodItemsInternal.indexOfFirst { it.id == itemId }
+        if (itemIndex != -1) {
+            val removedItem = _foodItemsInternal.removeAt(itemIndex)
+            _foodItemsStateFlow.value = _foodItemsInternal.toList()
 
-            if (_itemToEdit.value?.id == item.id) {
+            // Wenn das gelöschte Item gerade bearbeitet wurde, den Bearbeitungsstatus zurücksetzen
+            if (_itemToEdit.value?.id == removedItem.id) {
                 _itemToEdit.value = null
             }
             saveItems()
+        } else {
+            Log.w("FoodViewModel", "removeItemById: Item mit ID $itemId nicht gefunden.")
         }
     }
 
-    // Die updateItemXYZ Funktionen sollten auch den StateFlow aktualisieren.
-    // Sie beziehen sich auf den Index in _foodItemsInternal.
-    fun updateItemName(index: Int, newName: String) {
-        if (index in _foodItemsInternal.indices && newName.isNotBlank()) {
-            _foodItemsInternal[index] = _foodItemsInternal[index].copy(name = newName)
+    fun updateItemQuantityById(itemId: String, newQuantity: Int) {
+        val itemIndex = _foodItemsInternal.indexOfFirst { it.id == itemId }
+        if (itemIndex != -1) {
+            // Menge sollte nicht negativ werden. Wenn 0 erreicht wird, könnte man es auch entfernen.
+            val quantityToSet = newQuantity.coerceAtLeast(0)
+            _foodItemsInternal[itemIndex] = _foodItemsInternal[itemIndex].copy(quantity = quantityToSet)
             _foodItemsStateFlow.value = _foodItemsInternal.toList()
             saveItems()
+            // Optional: Wenn Menge 0 ist und das Item automatisch entfernt werden soll:
+            // if (quantityToSet == 0) {
+            //     removeItemById(itemId)
+            // }
+        } else {
+            Log.w("FoodViewModel", "updateItemQuantityById: Item mit ID $itemId nicht gefunden.")
         }
     }
 
-    fun updateItemBrand(index: Int, newBrand: String?) {
-        if (index in _foodItemsInternal.indices) {
-            _foodItemsInternal[index] = _foodItemsInternal[index].copy(brand = newBrand?.takeIf { it.isNotBlank() })
-            _foodItemsStateFlow.value = _foodItemsInternal.toList()
-            saveItems()
-        }
-    }
+    // Index-basierte Update-Funktionen entfernt, da Bearbeitung über EditScreen und ID-basierte Updates bevorzugt wird.
+    // fun updateItemName(index: Int, newName: String) { ... }
+    // fun updateItemBrand(index: Int, newBrand: String?) { ... }
+    // fun updateItemExpiryDate(index: Int, newExpiryDate: LocalDate?) { ... }
 
-    fun updateItemQuantity(index: Int, newQuantity: Int) {
-        if (index in _foodItemsInternal.indices) {
-            _foodItemsInternal[index] = _foodItemsInternal[index].copy(quantity = newQuantity.coerceAtLeast(0))
-            _foodItemsStateFlow.value = _foodItemsInternal.toList()
-            saveItems()
-        }
-    }
-
-    fun updateItemExpiryDate(index: Int, newExpiryDate: LocalDate?) {
-        if (index in _foodItemsInternal.indices) {
-            _foodItemsInternal[index] = _foodItemsInternal[index].copy(expiryDate = newExpiryDate)
-            _foodItemsStateFlow.value = _foodItemsInternal.toList()
-            saveItems()
-        }
-    }
 
     private fun saveItems() {
         viewModelScope.launch {
-            // Es ist sicherer, die Liste vom StateFlow oder von _foodItemsInternal.toList() zu speichern,
-            // um sicherzustellen, dass die gespeicherte Liste konsistent ist.
-            FoodStore.saveFoodList(getApplication(), _foodItemsInternal.toList())
+            // Speichere den aktuellen Wert des StateFlows, um Konsistenz zu gewährleisten
+            FoodStore.saveFoodList(getApplication(), _foodItemsStateFlow.value)
         }
     }
 
@@ -174,9 +165,16 @@ class FoodViewModelFactory(private val application: Application) : ViewModelProv
             @Suppress("UNCHECKED_CAST")
             return FoodViewModel(application) as T
         }
-        throw IllegalArgumentException("Unknown ViewModel class")
+        throw IllegalArgumentException("Unknown ViewModel class: ${modelClass.name}")
     }
 }
 
-fun OFFProduct.getDisplayName(): String = this.productName ?: this.genericName ?: "Produkt ohne Namen"
-
+// Diese Extension-Funktion gehört logisch eher zur OFFProduct-Definition oder einer Utility-Datei,
+// aber kann hier bleiben, wenn es nur an dieser Stelle verwendet wird.
+fun OFFProduct.getDisplayName(): String =
+    this.productName // Bevorzuge den allgemeinen Produktnamen
+        ?: this.productNameDE // Dann Deutsch
+        ?: this.productNameEN // Dann Englisch
+        ?: this.genericName // Dann den generischen Namen
+        //?: this.name // Fallback auf ein einfaches 'name'-Feld, falls vorhanden
+        ?: "Unbekanntes Produkt" // Letzter Fallback
