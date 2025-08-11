@@ -12,6 +12,10 @@ class ShoppingListRepository @Inject constructor(
         shoppingListDao.insertItem(item)
     }
 
+    suspend fun insertItems(items: List<ShoppingListItem>) {
+        shoppingListDao.insertItems(items)
+    }
+
     suspend fun updateItem(item: ShoppingListItem) {
         shoppingListDao.updateItem(item)
     }

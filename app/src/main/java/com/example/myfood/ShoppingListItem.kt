@@ -12,5 +12,6 @@ data class ShoppingListItem(
     var unit: String = "Stk.", // Stück, g, ml, Packung etc.
     var isChecked: Boolean = false,
     val openFoodFactsProductId: String? = null, // Optionale Produkt-ID von OFF
-    val timestamp: Long = System.currentTimeMillis() // Für Sortierung oder spätere Features
+    val timestamp: Long = System.currentTimeMillis(), // Für Sortierung oder spätere Features
+    val recipeSource: String? = null // <<< NEUES FELD HINZUGEFÜGT
 )

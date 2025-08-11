@@ -1,14 +1,21 @@
 package com.example.myfood.ui.recipe
 
 import android.util.Log
+import android.widget.Toast // Für Feedback an den Nutzer
+import androidx.compose.animation.AnimatedVisibility // Für sanftes Ein-/Ausblenden
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowBack // Korrigiert für RTL-Support
+import androidx.compose.material.icons.filled.AddShoppingCart
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.PlaylistAddCheck // Neues Icon
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.getValue
@@ -17,39 +24,50 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.semantics.error
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog // Für den Comparison Dialog
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
-//import androidx.privacysandbox.tools.core.generator.build
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.example.myfood.R
+import com.example.myfood.FoodItem // Dein Vorratsitem-Modell
 import com.example.myfood.data.model.Ingredient
 import com.example.myfood.data.model.Recipe
 import com.example.myfood.navigation.Screen
+import com.example.myfood.FoodViewModel // Importiere FoodViewModel (passe ggf. den Pfad an)
+import com.example.myfood.ui.shoppinglist.ShoppingListViewModel // Importiere ShoppingListViewModel (passe ggf. den Pfad an)
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun RecipeDetailScreen(
     recipeId: String,
     navController: NavController,
-    recipeViewModel: RecipeViewModel = hiltViewModel()
+    recipeViewModel: RecipeViewModel = hiltViewModel(),
+    foodViewModel: FoodViewModel = hiltViewModel(), // Injiziere FoodViewModel
+    shoppingListViewModel: ShoppingListViewModel = hiltViewModel() // Injiziere ShoppingListViewModel
 ) {
     LaunchedEffect(recipeId) {
         recipeViewModel.loadRecipeDetails(recipeId, translateToGerman = true)
     }
 
-    val state by recipeViewModel.recipeDetailUiState.collectAsState()
+    val recipeUiState by recipeViewModel.recipeDetailUiState.collectAsState()
+    // Diese Zeile erwartet, dass FoodViewModel .foodItemsStateFlow bereitstellt
+    val currentPantryItems by foodViewModel.foodItemsStateFlow.collectAsState()
+
     var showDeleteDialog by remember { mutableStateOf(false) }
+    var showComparisonDialog by remember { mutableStateOf(false) }
+
+    val context = LocalContext.current
 
     Scaffold(
         topBar = {
             TopAppBar(
                 title = {
-                    val currentTitle = if (state is RecipeDetailUiState.Success) {
-                        (state as RecipeDetailUiState.Success).recipe.title
+                    val currentTitle = if (recipeUiState is RecipeDetailUiState.Success) {
+                        (recipeUiState as RecipeDetailUiState.Success).recipe.title
                     } else {
                         "Rezeptdetails"
                     }
@@ -58,12 +76,21 @@ fun RecipeDetailScreen(
                 windowInsets = WindowInsets(0.dp),
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
-                        Icon(Icons.Filled.ArrowBack, contentDescription = "Zurück")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Zurück")
                     }
                 },
                 actions = {
-                    if (state is RecipeDetailUiState.Success) {
-                        val currentRecipe = (state as RecipeDetailUiState.Success).recipe
+                    if (recipeUiState is RecipeDetailUiState.Success) {
+                        val currentRecipe = (recipeUiState as RecipeDetailUiState.Success).recipe
+                        IconButton(onClick = {
+                            if (currentRecipe.ingredients.isNotEmpty()) {
+                                showComparisonDialog = true
+                            } else {
+                                Toast.makeText(context, "Rezept hat keine Zutaten.", Toast.LENGTH_SHORT).show()
+                            }
+                        }) {
+                            Icon(Icons.Filled.PlaylistAddCheck, contentDescription = "Mit Vorrat abgleichen")
+                        }
                         IconButton(onClick = {
                             val idForEditScreen: Long? = currentRecipe.id
                             if (idForEditScreen != null) {
@@ -80,8 +107,8 @@ fun RecipeDetailScreen(
             )
         }
     ) { paddingValues ->
-        if (showDeleteDialog && state is RecipeDetailUiState.Success) {
-            val recipeToDelete = (state as RecipeDetailUiState.Success).recipe
+        if (showDeleteDialog && recipeUiState is RecipeDetailUiState.Success) {
+            val recipeToDelete = (recipeUiState as RecipeDetailUiState.Success).recipe
             DeleteRecipeDialog(
                 recipeTitle = recipeToDelete.title,
                 onConfirm = {
@@ -94,26 +121,51 @@ fun RecipeDetailScreen(
             )
         }
 
-        when (val currentState = state) {
+        if (showComparisonDialog && recipeUiState is RecipeDetailUiState.Success) {
+            val currentRecipe = (recipeUiState as RecipeDetailUiState.Success).recipe
+            RecipePantryComparisonDialog(
+                recipeTitle = currentRecipe.title,
+                recipeIngredients = currentRecipe.ingredients,
+                pantryItems = currentPantryItems,
+                onDismiss = { showComparisonDialog = false },
+                onConfirm = { ingredientsToAdd ->
+                    showComparisonDialog = false
+                    if (ingredientsToAdd.isNotEmpty()) {
+                        shoppingListViewModel.addIngredientsToShoppingList(
+                            ingredients = ingredientsToAdd,
+                            recipeName = currentRecipe.title
+                        )
+                        Toast.makeText(
+                            context,
+                            "${ingredientsToAdd.size} Zutat(en) zur Einkaufsliste hinzugefügt.",
+                            Toast.LENGTH_LONG
+                        ).show()
+                    } else {
+                        Toast.makeText(
+                            context,
+                            "Keine Zutaten zur Einkaufsliste hinzugefügt.",
+                            Toast.LENGTH_SHORT
+                        ).show()
+                    }
+                }
+            )
+        }
+
+        when (val currentState = recipeUiState) {
             is RecipeDetailUiState.Loading -> {
                 Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(paddingValues),
+                    modifier = Modifier.fillMaxSize().padding(paddingValues),
                     contentAlignment = Alignment.Center
                 ) {
                     CircularProgressIndicator()
                 }
             }
             is RecipeDetailUiState.Success -> {
-                val recipe = currentState.recipe
-                RecipeDetailContent(recipe = recipe, modifier = Modifier.padding(paddingValues))
+                RecipeDetailContent(recipe = currentState.recipe, modifier = Modifier.padding(paddingValues))
             }
             is RecipeDetailUiState.Error -> {
                 Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(paddingValues),
+                    modifier = Modifier.fillMaxSize().padding(paddingValues),
                     contentAlignment = Alignment.Center
                 ) {
                     Text("Fehler: ${currentState.message}")
@@ -125,7 +177,7 @@ fun RecipeDetailScreen(
 
 @Composable
 fun RecipeDetailContent(recipe: Recipe, modifier: Modifier = Modifier) {
-    val debugRecipeTitleForSpecificLogging = "Eiersalat" // Anpassen für spezifisches Logging
+    val debugRecipeTitleForSpecificLogging = "Eiersalat"
 
     if (recipe.title.contains(debugRecipeTitleForSpecificLogging, ignoreCase = true)) {
         Log.d("RecipeDetailContent", "Displaying Recipe: ${recipe.title}")
@@ -133,30 +185,23 @@ fun RecipeDetailContent(recipe: Recipe, modifier: Modifier = Modifier) {
     }
 
     LazyColumn(
-        modifier = modifier
-            .fillMaxSize(),
-        contentPadding = PaddingValues(bottom = 24.dp)
+        modifier = modifier.fillMaxSize(),
+        contentPadding = PaddingValues(bottom = 72.dp)
     ) {
-        // --- Bild ---
-        // Nur ein item für das Bild hinzufügen, wenn ein imagePath vorhanden ist
         if (!recipe.imagePath.isNullOrBlank()) {
-            item { // Das Bild ist ein eigenes Item in der LazyColumn
+            item {
                 val imagePathFromRecipe = recipe.imagePath!!
-                val modelDataForCoil: Any
-
-                if (imagePathFromRecipe.startsWith("pics/") &&
+                val modelDataForCoil: Any = if (imagePathFromRecipe.startsWith("pics/") &&
                     !imagePathFromRecipe.startsWith("/") &&
                     !imagePathFromRecipe.contains("://")
                 ) {
-                    modelDataForCoil = "file:///android_asset/$imagePathFromRecipe"
-                    if (recipe.title.contains(debugRecipeTitleForSpecificLogging, ignoreCase = true)) {
-                        Log.i("RecipeDetailContent", "Image identified as ASSET. Path for Coil: '$modelDataForCoil'")
-                    }
+                    "file:///android_asset/$imagePathFromRecipe"
                 } else {
-                    modelDataForCoil = imagePathFromRecipe
-                    if (recipe.title.contains(debugRecipeTitleForSpecificLogging, ignoreCase = true)) {
-                        Log.i("RecipeDetailContent", "Image identified as USER-GENERATED/FILE/URI. Path for Coil: '$modelDataForCoil'")
-                    }
+                    imagePathFromRecipe
+                }
+
+                if (recipe.title.contains(debugRecipeTitleForSpecificLogging, ignoreCase = true)) {
+                    Log.i("RecipeDetailContent", "Path for Coil: '$modelDataForCoil'")
                 }
 
                 AsyncImage(
@@ -166,36 +211,21 @@ fun RecipeDetailContent(recipe: Recipe, modifier: Modifier = Modifier) {
                         .placeholder(R.drawable.ic_placeholder_image)
                         .error(R.drawable.ic_error_image)
                         .listener(
-                            onStart = { _ ->
-                                if (recipe.title.contains(debugRecipeTitleForSpecificLogging, ignoreCase = true)) {
-                                    Log.d("RecipeDetailContent", "Coil: Start loading '$modelDataForCoil'")
-                                }
-                            },
                             onError = { _, result ->
                                 if (recipe.title.contains(debugRecipeTitleForSpecificLogging, ignoreCase = true)) {
                                     Log.e("RecipeDetailContent", "Coil: Error loading '$modelDataForCoil': ${result.throwable}")
-                                    result.throwable.printStackTrace()
-                                }
-                            },
-                            onSuccess = { _, _ ->
-                                if (recipe.title.contains(debugRecipeTitleForSpecificLogging, ignoreCase = true)) {
-                                    Log.i("RecipeDetailContent", "Coil: Success loading '$modelDataForCoil'")
                                 }
                             }
                         )
                         .build(),
                     contentDescription = recipe.title ?: "Rezeptbild",
                     contentScale = ContentScale.Crop,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(280.dp) // Behalte die Höhe, wenn das Bild angezeigt wird
+                    modifier = Modifier.fillMaxWidth().height(280.dp)
                 )
-                Spacer(modifier = Modifier.height(16.dp)) // Abstand nach dem Bild
+                Spacer(modifier = Modifier.height(16.dp))
             }
         }
-        // KEIN ELSE-BLOCK HIER, um keinen Platz zu reservieren, wenn kein Bild da ist
 
-        // --- Titel und Metadaten ---
         item {
             Column(modifier = Modifier.padding(horizontal = 16.dp)) {
                 Text(
@@ -204,41 +234,25 @@ fun RecipeDetailContent(recipe: Recipe, modifier: Modifier = Modifier) {
                     fontWeight = FontWeight.Bold
                 )
                 Spacer(modifier = Modifier.height(8.dp))
-
                 recipe.source?.let {
                     if (it.isNotBlank()) {
-                        Text(
-                            "Quelle: $it",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                        Text("Quelle: $it", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
                 recipe.category?.let { category ->
                     if (category.isNotBlank()) {
-                        Text(
-                            "Kategorie: $category",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(top = 4.dp)
-                        )
+                        Text("Kategorie: $category", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 4.dp))
                     }
                 }
                 recipe.tags?.let { tags ->
                     if (tags.isNotEmpty()) {
-                        Text(
-                            "Tags: ${tags.joinToString(", ")}",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(top = 4.dp)
-                        )
+                        Text("Tags: ${tags.joinToString(", ")}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 4.dp))
                     }
                 }
                 Spacer(modifier = Modifier.height(24.dp))
             }
         }
 
-        // --- Zutaten ---
         item {
             SectionTitle(title = "Zutaten", modifier = Modifier.padding(horizontal = 16.dp))
             Spacer(modifier = Modifier.height(8.dp))
@@ -253,13 +267,11 @@ fun RecipeDetailContent(recipe: Recipe, modifier: Modifier = Modifier) {
             Spacer(modifier = Modifier.height(24.dp))
         }
 
-        // --- Anleitung ---
         if (recipe.instructions.isNotEmpty()) {
             item {
                 SectionTitle(title = "Anleitung", modifier = Modifier.padding(horizontal = 16.dp))
                 Spacer(modifier = Modifier.height(12.dp))
             }
-
             val cleanedInstructions = recipe.instructions
                 .joinToString("\n")
                 .replace("<br>", "\n", ignoreCase = true)
@@ -279,7 +291,6 @@ fun RecipeDetailContent(recipe: Recipe, modifier: Modifier = Modifier) {
     }
 }
 
-// Hilfs-Composable für Sektionstitel
 @Composable
 fun SectionTitle(title: String, modifier: Modifier = Modifier) {
     Text(
@@ -290,7 +301,6 @@ fun SectionTitle(title: String, modifier: Modifier = Modifier) {
     )
 }
 
-// Überarbeitete IngredientRow
 @Composable
 fun IngredientRowModern(ingredient: Ingredient, modifier: Modifier = Modifier) {
     Row(
@@ -306,14 +316,12 @@ fun IngredientRowModern(ingredient: Ingredient, modifier: Modifier = Modifier) {
                 quantityText?.let { append("$it ") }
                 unitText?.let { append("$it ") }
                 append(nameText)
-            },
+            }.trim(),
             style = MaterialTheme.typography.bodyLarge
         )
     }
 }
 
-
-// Neue Composable für einen einzelnen nummerierten Anleitungsschritt
 @Composable
 fun InstructionStepRow(stepNumber: Int, instruction: String, modifier: Modifier = Modifier) {
     Row(
@@ -325,9 +333,7 @@ fun InstructionStepRow(stepNumber: Int, instruction: String, modifier: Modifier 
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier
-                .width(32.dp)
-                .padding(end = 4.dp)
+            modifier = Modifier.width(32.dp).padding(end = 4.dp)
         )
         Text(
             text = instruction,
@@ -337,7 +343,6 @@ fun InstructionStepRow(stepNumber: Int, instruction: String, modifier: Modifier 
     }
 }
 
-// DeleteRecipeDialog Composable (unverändert)
 @Composable
 fun DeleteRecipeDialog(
     recipeTitle: String,
@@ -352,14 +357,209 @@ fun DeleteRecipeDialog(
             Button(
                 onClick = onConfirm,
                 colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
-            ) {
-                Text("Löschen")
-            }
+            ) { Text("Löschen") }
         },
         dismissButton = {
-            Button(onClick = onDismiss) {
-                Text("Abbrechen")
-            }
+            Button(onClick = onDismiss) { Text("Abbrechen") }
         }
     )
+}
+
+data class ComparisonItemState(
+    val recipeIngredient: Ingredient,
+    var suggestedPantryItems: List<FoodItem> = emptyList(),
+    var selectedPantryItem: FoodItem? = null,
+    var userConfirmedEnoughInPantry: Boolean = false,
+    var needsToBeAddedToShoppingList: Boolean = true
+) {
+    fun getRecipeIngredientDisplayString(): String {
+        val q = recipeIngredient.quantity?.takeIf { it.isNotBlank() }
+        val u = recipeIngredient.unit?.takeIf { it.isNotBlank() }
+        val n = recipeIngredient.name
+        return listOfNotNull(q, u, n).joinToString(" ").trim()
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun RecipePantryComparisonDialog(
+    recipeTitle: String,
+    recipeIngredients: List<Ingredient>,
+    pantryItems: List<FoodItem>,
+    onDismiss: () -> Unit,
+    onConfirm: (List<Ingredient>) -> Unit
+) {
+    val comparisonStates = remember {
+        recipeIngredients.map { ingredient ->
+            ComparisonItemState(
+                recipeIngredient = ingredient,
+                suggestedPantryItems = pantryItems.filter { pantryItem ->
+                    pantryItem.name.contains(ingredient.name, ignoreCase = true) ||
+                            ingredient.name.contains(pantryItem.name, ignoreCase = true)
+                }
+            )
+        }.toMutableStateList()
+    }
+
+    Dialog(onDismissRequest = onDismiss) {
+        Card(
+            modifier = Modifier
+                .fillMaxWidth(0.95f)
+                .fillMaxHeight(0.9f)
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text(
+                    "'$recipeTitle' mit Vorrat abgleichen",
+                    style = MaterialTheme.typography.titleLarge,
+                    modifier = Modifier.padding(bottom = 16.dp)
+                )
+
+                LazyColumn(modifier = Modifier.weight(1f)) {
+                    items(comparisonStates.size) { index ->
+                        val itemState = comparisonStates[index]
+                        ComparisonItemRow(
+                            itemState = itemState,
+                            onPantryItemSelected = { pantryItem ->
+                                comparisonStates[index] = itemState.copy(
+                                    selectedPantryItem = pantryItem,
+                                    needsToBeAddedToShoppingList = pantryItem == null,
+                                    userConfirmedEnoughInPantry = if (pantryItem != null) itemState.userConfirmedEnoughInPantry else false
+                                )
+                            },
+                            onConfirmEnoughInPantryChange = { isEnough ->
+                                comparisonStates[index] = itemState.copy(
+                                    userConfirmedEnoughInPantry = isEnough,
+                                    needsToBeAddedToShoppingList = if (isEnough && itemState.selectedPantryItem != null) false else itemState.needsToBeAddedToShoppingList
+                                )
+                            },
+                            onAddToShoppingListChange = { shouldAdd ->
+                                comparisonStates[index] = itemState.copy(
+                                    needsToBeAddedToShoppingList = shouldAdd,
+                                    userConfirmedEnoughInPantry = if (shouldAdd) false else itemState.userConfirmedEnoughInPantry,
+                                    selectedPantryItem = if (shouldAdd) null else itemState.selectedPantryItem
+                                )
+                            }
+                        )
+                        if (index < comparisonStates.size - 1) {
+                            Divider(modifier = Modifier.padding(vertical = 8.dp))
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    TextButton(onClick = onDismiss) {
+                        Text("Abbrechen")
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Button(onClick = {
+                        val itemsToAdd = comparisonStates
+                            .filter { it.needsToBeAddedToShoppingList }
+                            .map { it.recipeIngredient }
+                        onConfirm(itemsToAdd)
+                    }) {
+                        Icon(Icons.Default.AddShoppingCart, contentDescription = null, modifier = Modifier.size(ButtonDefaults.IconSize))
+                        Spacer(modifier = Modifier.size(ButtonDefaults.IconSpacing))
+                        Text("Hinzufügen")
+                    }
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun ComparisonItemRow(
+    itemState: ComparisonItemState,
+    onPantryItemSelected: (FoodItem?) -> Unit,
+    onConfirmEnoughInPantryChange: (Boolean) -> Unit,
+    onAddToShoppingListChange: (Boolean) -> Unit
+) {
+    var expandedPantryDropdown by remember { mutableStateOf(false) }
+
+    Column {
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+            Checkbox(
+                checked = itemState.needsToBeAddedToShoppingList,
+                onCheckedChange = { isChecked ->
+                    onAddToShoppingListChange(isChecked)
+                }
+            )
+            Text(
+                text = itemState.getRecipeIngredientDisplayString(),
+                style = MaterialTheme.typography.bodyLarge,
+                modifier = Modifier.weight(1f).padding(start = 8.dp)
+            )
+        }
+
+        AnimatedVisibility(visible = !itemState.needsToBeAddedToShoppingList && itemState.suggestedPantryItems.isNotEmpty()) {
+            Column(modifier = Modifier.padding(start = 32.dp, top = 8.dp, end = 16.dp)) {
+                Text("Aus Vorrat:", style = MaterialTheme.typography.labelMedium)
+                Spacer(modifier = Modifier.height(4.dp))
+
+                ExposedDropdownMenuBox(
+                    expanded = expandedPantryDropdown,
+                    onExpandedChange = { expandedPantryDropdown = !expandedPantryDropdown },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    OutlinedTextField(
+                        value = itemState.selectedPantryItem?.name ?: "Wähle Vorratsitem...",
+                        onValueChange = {},
+                        readOnly = true,
+                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandedPantryDropdown) },
+                        modifier = Modifier.menuAnchor().fillMaxWidth(),
+                        textStyle = MaterialTheme.typography.bodyMedium
+                    )
+                    ExposedDropdownMenu(
+                        expanded = expandedPantryDropdown,
+                        onDismissRequest = { expandedPantryDropdown = false }
+                    ) {
+                        itemState.suggestedPantryItems.forEach { pantryItem ->
+                            DropdownMenuItem(
+                                text = { Text("${pantryItem.name} (Vorrat: ${pantryItem.quantity})") },
+                                onClick = {
+                                    onPantryItemSelected(pantryItem)
+                                    expandedPantryDropdown = false
+                                }
+                            )
+                        }
+                        DropdownMenuItem(
+                            text = { Text("Keines davon / Manuell benötigt") },
+                            onClick = {
+                                onPantryItemSelected(null)
+                                onAddToShoppingListChange(true)
+                                expandedPantryDropdown = false
+                            }
+                        )
+                    }
+                }
+
+                AnimatedVisibility(visible = itemState.selectedPantryItem != null) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .padding(top = 8.dp)
+                            .clickable { onConfirmEnoughInPantryChange(!itemState.userConfirmedEnoughInPantry) }
+                    ) {
+                        Checkbox(
+                            checked = itemState.userConfirmedEnoughInPantry,
+                            onCheckedChange = onConfirmEnoughInPantryChange
+                        )
+                        Text("Ausreichend von diesem Vorratsitem vorhanden?", style = MaterialTheme.typography.bodyMedium)
+                    }
+                }
+            }
+        }
+        LaunchedEffect(itemState.suggestedPantryItems, itemState.selectedPantryItem) {
+            if (itemState.suggestedPantryItems.isEmpty() && itemState.selectedPantryItem == null && !itemState.needsToBeAddedToShoppingList) {
+                // onAddToShoppingListChange(true) // Deaktiviert für manuelle Kontrolle
+            }
+        }
+    }
 }

@@ -1,5 +1,5 @@
 plugins {
-     alias(libs.plugins.android.application)
+    alias(libs.plugins.android.application)
     // Or id("com.android.application")
     alias(libs.plugins.kotlin.android)    // Or id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
@@ -17,8 +17,8 @@ android {
         applicationId = "com.example.myfood"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 3
+        versionName = "2.2"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -55,9 +55,9 @@ android {
 kotlin {
     jvmToolchain(21) // Aligned with Java version
     //sourceSets.all {
-        //languageSettings.optIn("androidx.compose.material.ExperimentalMaterialApi")
-        //languageSettings.optIn("kotlinx.serialization.ExperimentalSerializationApi")
-    }
+    //languageSettings.optIn("androidx.compose.material.ExperimentalMaterialApi")
+    //languageSettings.optIn("kotlinx.serialization.ExperimentalSerializationApi")
+}
 
 // Allow references to generated code
 kapt {

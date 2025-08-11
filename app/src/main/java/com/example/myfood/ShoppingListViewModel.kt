@@ -3,6 +3,7 @@ package com.example.myfood.ui.shoppinglist
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.myfood.FoodItem // Stelle sicher, dass FoodItem auch 'brand: String?' hat und @Serializable ist
+import com.example.myfood.data.model.Ingredient // ### NEUER IMPORT BENÖTIGT ###
 import com.example.myfood.data.openfoodfacts.OFFProduct
 import com.example.myfood.data.openfoodfacts.OpenFoodFactsApiService
 import com.example.myfood.data.pantry.PantryRepository
@@ -60,9 +61,9 @@ class ShoppingListViewModel @Inject constructor(
             _uiState
                 .map { it.searchQuery }
                 .distinctUntilChanged()
-                .debounce(500L)
+                .debounce(500L) // Wartet 500ms nach der letzten Eingabe bevor die Suche startet
                 .collectLatest { query ->
-                    if (query.length > 2) {
+                    if (query.length > 2) { // Startet die Suche erst ab 3 Zeichen
                         performSearch(query)
                     } else {
                         _uiState.update {
@@ -78,11 +79,11 @@ class ShoppingListViewModel @Inject constructor(
     }
 
     fun onSearchQueryChanged(query: String) {
-        _uiState.update { it.copy(searchQuery = query, isLoadingSearch = query.length > 2) }
+        _uiState.update { it.copy(searchQuery = query, isLoadingSearch = query.length > 2 && query.isNotBlank()) }
     }
 
     private fun performSearch(query: String) {
-        searchJob?.cancel()
+        searchJob?.cancel() // Bricht laufende Suchen ab
         _uiState.update { it.copy(isLoadingSearch = true, errorSearching = null) }
         searchJob = viewModelScope.launch {
             try {
@@ -99,7 +100,7 @@ class ShoppingListViewModel @Inject constructor(
                         }
                     }
                 )
-            } catch (e: Exception) {
+            } catch (e: Exception) { // Fängt Netzwerkfehler etc. ab
                 _uiState.update {
                     it.copy(searchResults = emptyList(), isLoadingSearch = false, errorSearching = "Fehler: ${e.localizedMessage}")
                 }
@@ -120,18 +121,32 @@ class ShoppingListViewModel @Inject constructor(
 
     fun addItemFromOffProduct(product: OFFProduct) {
         saveShoppingListItem(
-            id = 0,
+            id = 0, // 0 signalisiert ein neues Item
             name = product.getDisplayName(),
             brand = product.brands?.split(",")?.firstOrNull()?.trim(),
-            quantity = "1",
-            unit = "Produkt",
+            quantity = "1", // Standardmenge
+            unit = "Stück", // Standardeinheit, anpassbar
             openFoodFactsProductId = product.id
         )
-        clearSearchResultsAndQuery()
+        clearSearchResultsAndQuery() // Nach dem Hinzufügen Suchergebnisse leeren
     }
 
-    fun saveShoppingListItem(id: Int, name: String, brand: String?, quantity: String, unit: String, openFoodFactsProductId: String? = null) {
+    fun saveShoppingListItem(
+        id: Int,
+        name: String,
+        brand: String?,
+        quantity: String,
+        unit: String,
+        openFoodFactsProductId: String? = null,
+        recipeSource: String? = null // Optional: Herkunft aus Rezept
+    ) {
         viewModelScope.launch {
+            if (name.isBlank()) {
+                // Hier könntest du einen Fehler im UI anzeigen oder einfach nichts tun
+                println("saveShoppingListItem: Name darf nicht leer sein.")
+                return@launch
+            }
+
             val itemToSave: ShoppingListItem
             if (id != 0) { // Edit mode
                 val existingItem = shoppingListRepository.getItemById(id)
@@ -139,13 +154,23 @@ class ShoppingListViewModel @Inject constructor(
                     name = name,
                     brand = brand,
                     quantity = quantity,
-                    unit = unit
-                    // openFoodFactsProductId bleibt erhalten, wenn schon gesetzt
-                ) ?: ShoppingListItem(id = 0, name = name, brand = brand, quantity = quantity, unit = unit, openFoodFactsProductId = openFoodFactsProductId) // Fallback
+                    unit = unit,
+                    // openFoodFactsProductId und recipeSource bleiben erhalten, wenn schon gesetzt,
+                    // es sei denn, sie werden explizit als neue Werte übergeben (hier nicht der Fall für recipeSource beim Editieren)
+                ) ?: ShoppingListItem(
+                    id = 0, // Neuer Eintrag, falls das Original nicht gefunden wurde (Fallback)
+                    name = name,
+                    brand = brand,
+                    quantity = quantity,
+                    unit = unit,
+                    openFoodFactsProductId = openFoodFactsProductId,
+                    recipeSource = recipeSource // Auch für den Fallback
+                )
                 if (existingItem != null) {
                     shoppingListRepository.updateItem(itemToSave)
                 } else {
-                    shoppingListRepository.insertItem(itemToSave.copy(id = 0)) // Als neues Item, falls Edit fehlschlägt
+                    // Sollte idealerweise nicht passieren, wenn id != 0
+                    shoppingListRepository.insertItem(itemToSave.copy(id = 0))
                 }
             } else { // Add mode
                 itemToSave = ShoppingListItem(
@@ -153,11 +178,12 @@ class ShoppingListViewModel @Inject constructor(
                     brand = brand,
                     quantity = quantity,
                     unit = unit,
-                    openFoodFactsProductId = openFoodFactsProductId
+                    openFoodFactsProductId = openFoodFactsProductId,
+                    recipeSource = recipeSource // Hinzufügen der Herkunft
                 )
                 shoppingListRepository.insertItem(itemToSave)
             }
-            onShowAddItemDialogChanged(false, null)
+            onShowAddItemDialogChanged(false, null) // Dialog schließen
         }
     }
 
@@ -167,100 +193,65 @@ class ShoppingListViewModel @Inject constructor(
         }
     }
 
-    // --- WIEDERHERGESTELLTE FUNKTION ---
     fun toggleItemChecked(itemId: Int) {
         viewModelScope.launch {
-            println("toggleItemChecked: Funktion gestartet für itemId: $itemId")
             val item = shoppingListRepository.getItemById(itemId)
             if (item == null) {
                 println("toggleItemChecked: Item mit ID $itemId nicht gefunden.")
                 return@launch
             }
             val updatedItem = item.copy(isChecked = !item.isChecked)
-            println("toggleItemChecked: Aktualisiere Item '${updatedItem.name}' zu isChecked=${updatedItem.isChecked}")
             shoppingListRepository.updateItem(updatedItem)
-            println("toggleItemChecked: Item erfolgreich aktualisiert.")
         }
     }
 
-    // --- FUNKTION FÜR DAS ÜBERTRAGEN ALLER MARKIERTER ITEMS ---
     fun transferCheckedItemsToPantryAndClear() {
         viewModelScope.launch {
-            println("transferCheckedItemsToPantryAndClear: Funktion gestartet.")
+            // Um sicherzustellen, dass der isChecked Status aktuell ist, direkt aus der DB laden
+            val allItems = shoppingListRepository.getAllItems().first() // Holt den aktuellen Stand
+            val checkedItems = allItems.filter { it.isChecked }
 
-            // Hole die aktuell als 'isChecked' markierten Items direkt aus der DB/Repository,
-            // da _uiState.value.items den isChecked-Status evtl. noch nicht reflektiert, wenn
-            // toggleItemChecked gerade erst aufgerufen wurde und der Flow noch nicht aktualisiert hat.
-            // Sicherer ist es, die Datenquelle direkt abzufragen oder eine leichte Verzögerung einzubauen.
-            // Für diese Implementierung verlassen wir uns darauf, dass der Nutzer nach dem Markieren auf den Button klickt
-            // und der _uiState bis dahin aktuell ist. Alternativ:
-            // val checkedItems = shoppingListRepository.getAllItems().first().filter { it.isChecked }
-            val checkedItems = _uiState.value.items.filter { it.isChecked }
-
-            println("transferCheckedItemsToPantryAndClear: Anzahl geprüfter ShoppingListItems: ${checkedItems.size}")
             if (checkedItems.isEmpty()) {
-                println("transferCheckedItemsToPantryAndClear: Keine Items zum Übertragen ausgewählt. Funktion wird beendet.")
+                println("transferCheckedItemsToPantryAndClear: Keine Items zum Übertragen ausgewählt.")
                 return@launch
-            }
-            checkedItems.forEachIndexed { index, item ->
-                println("transferCheckedItemsToPantryAndClear: ShoppingListItem[$index] - ID: ${item.id}, Name: ${item.name}, Menge: ${item.quantity}, Marke: ${item.brand}, isChecked: ${item.isChecked}")
             }
 
             val itemsToTransfer = mutableListOf<FoodItem>()
             for (checkedShoppingItem in checkedItems) {
                 val quantityString = checkedShoppingItem.quantity
-                val numericQuantity = quantityString.split(" ").firstOrNull()?.toDoubleOrNull()?.toInt()
-                    ?: quantityString.filter { it.isDigit() }.toIntOrNull()
-                    ?: 1
+                // Verbesserte Logik zur Extraktion der numerischen Menge
+                val numericQuantity = quantityString.filter { it.isDigit() }.toIntOrNull() ?: 1
 
-                val brandName = checkedShoppingItem.brand
-                println("transferCheckedItemsToPantryAndClear: Für '${checkedShoppingItem.name}' - numericQuantity: $numericQuantity, brandName: $brandName")
 
                 val foodItemToPantry = FoodItem(
-                    id = UUID.randomUUID().toString(), // Eindeutige ID für jedes FoodItem
+                    id = UUID.randomUUID().toString(),
                     name = checkedShoppingItem.name,
-                    brand = brandName,
+                    brand = checkedShoppingItem.brand,
                     quantity = numericQuantity,
                     openFoodFactsId = checkedShoppingItem.openFoodFactsProductId
+                    // expiryDate, etc. könnten hier Standardwerte bekommen oder über einen Dialog abgefragt werden
                 )
                 itemsToTransfer.add(foodItemToPantry)
             }
 
-            println("transferCheckedItemsToPantryAndClear: Zu übertragende FoodItems (Gesamt: ${itemsToTransfer.size}):")
-            itemsToTransfer.forEachIndexed { index, item ->
-                println("transferCheckedItemsToPantryAndClear: FoodItemToTransfer[$index] - Name: ${item.name}, Menge: ${item.quantity}, Marke: ${item.brand}, ID: ${item.id}")
-            }
-
             if (itemsToTransfer.isNotEmpty()) {
                 try {
-                    println("transferCheckedItemsToPantryAndClear: Rufe pantryRepository.addFoodItems auf...")
                     pantryRepository.addFoodItems(itemsToTransfer)
-                    println("transferCheckedItemsToPantryAndClear: pantryRepository.addFoodItems ERFOLGREICH aufgerufen.")
-                } catch (e: Exception) {
-                    println("transferCheckedItemsToPantryAndClear: FEHLER beim Aufruf von pantryRepository.addFoodItems: ${e.message}")
-                    e.printStackTrace()
-                    return@launch // Bei Fehler hier abbrechen
-                }
-
-                try {
-                    println("transferCheckedItemsToPantryAndClear: Rufe shoppingListRepository.deleteItems auf...")
                     shoppingListRepository.deleteItems(checkedItems) // Lösche die übertragenen ShoppingListItems
-                    println("transferCheckedItemsToPantryAndClear: shoppingListRepository.deleteItems ERFOLGREICH aufgerufen.")
+                    println("transferCheckedItemsToPantryAndClear: ${itemsToTransfer.size} Items erfolgreich übertragen und von Einkaufsliste gelöscht.")
                 } catch (e: Exception) {
-                    println("transferCheckedItemsToPantryAndClear: FEHLER beim Aufruf von shoppingListRepository.deleteItems: ${e.message}")
+                    println("transferCheckedItemsToPantryAndClear: FEHLER beim Übertragen oder Löschen: ${e.message}")
                     e.printStackTrace()
+                    // Überlege dir eine Fehlerbehandlung für den User
                 }
-            } else {
-                println("transferCheckedItemsToPantryAndClear: Keine FoodItems zum Übertragen erstellt.")
             }
-            println("transferCheckedItemsToPantryAndClear: Funktion beendet.")
         }
     }
 
-    // Diese Funktion kann nützlich sein, um alle markierten Items zu löschen, ohne sie zu übertragen.
     fun deleteCheckedItems() {
         viewModelScope.launch {
-            val checkedItems = _uiState.value.items.filter { it.isChecked }
+            val allItems = shoppingListRepository.getAllItems().first()
+            val checkedItems = allItems.filter { it.isChecked }
             if (checkedItems.isNotEmpty()) {
                 shoppingListRepository.deleteItems(checkedItems)
                 println("deleteCheckedItems: ${checkedItems.size} markierte Items gelöscht.")
@@ -271,4 +262,36 @@ class ShoppingListViewModel @Inject constructor(
     fun onShowAddItemDialogChanged(show: Boolean, item: ShoppingListItem?) {
         _uiState.update { it.copy(showAddItemDialog = show, itemToEdit = if (show) item else null) }
     }
+
+    // ### NEUE FUNKTION HINZUGEFÜGT ###
+    /**
+     * Fügt eine Liste von Rezept-Zutaten zur Einkaufsliste hinzu.
+     * @param ingredients Die Liste der hinzuzufügenden Zutaten vom Typ [Ingredient].
+     * @param recipeName Der Name des Rezepts, aus dem die Zutaten stammen.
+     */
+    fun addIngredientsToShoppingList(ingredients: List<Ingredient>, recipeName: String) {
+        viewModelScope.launch {
+            val itemsToInsert = ingredients.map { ingredient ->
+                ShoppingListItem(
+                    // id wird von Room automatisch generiert, daher hier nicht explizit setzen (oder 0 lassen)
+                    name = ingredient.name,
+                    brand = null, // Marke ist bei Rezeptzutaten oft nicht spezifiziert
+                    quantity = ingredient.quantity ?: "1", // Standardmenge, falls nicht vorhanden
+                    unit = ingredient.unit ?: "Stk.", // Standardeinheit, falls nicht vorhanden
+                    isChecked = false,
+                    openFoodFactsProductId = null, // In der Regel nicht vorhanden für Rezeptzutaten
+                    recipeSource = recipeName // Herkunft des Items
+                )
+            }
+            if (itemsToInsert.isNotEmpty()) {
+                shoppingListRepository.insertItems(itemsToInsert) // Repository-Methode zum Einfügen mehrerer Items
+                println("addIngredientsToShoppingList: ${itemsToInsert.size} Zutaten von Rezept '$recipeName' zur Einkaufsliste hinzugefügt.")
+            }
+        }
+    }
 }
+
+// Kleine Hilfsfunktion in OFFProduct, falls nicht schon global vorhanden
+// Es ist besser, dies direkt in der OFFProduct-Klasse oder als Top-Level Extension zu haben.
+// fun OFFProduct.getDisplayName(): String = this.productName ?: this.genericName ?: "Unbekanntes Produkt"
+

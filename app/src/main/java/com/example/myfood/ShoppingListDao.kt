@@ -15,6 +15,9 @@ interface ShoppingListDao {
     @androidx.room.Insert(onConflict = androidx.room.OnConflictStrategy.REPLACE)
     suspend fun insertItem(item: ShoppingListItem)
 
+    @Insert(onConflict = OnConflictStrategy.REPLACE) // NEU HINZUGEFÜGT
+    suspend fun insertItems(items: List<ShoppingListItem>) // NEU HINZUGEFÜGT
+
     // Aktualisiert ein bestehendes Element.
     @androidx.room.Update
     suspend fun updateItem(item: ShoppingListItem)
