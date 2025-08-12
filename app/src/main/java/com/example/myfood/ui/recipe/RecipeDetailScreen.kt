@@ -402,7 +402,7 @@ data class ComparisonItemState(
     var suggestedPantryItems: List<FoodItem> = emptyList(),
     var selectedPantryItem: FoodItem? = null,
     var userConfirmedEnoughInPantry: Boolean = false,
-    var needsToBeAddedToShoppingList: Boolean = true
+    var needsToBeAddedToShoppingList: Boolean = true // Default to true, will be adjusted in RecipePantryComparisonDialog
 ) {
     fun getRecipeIngredientDisplayString(): String {
         val q = recipeIngredient.quantity?.takeIf { it.isNotBlank() }
@@ -423,12 +423,14 @@ fun RecipePantryComparisonDialog(
 ) {
     val comparisonStates = remember {
         recipeIngredients.map { ingredient ->
+            val suggestedItems = pantryItems.filter { pantryItem ->
+                pantryItem.name.contains(ingredient.name, ignoreCase = true) ||
+                        ingredient.name.contains(pantryItem.name, ignoreCase = true)
+            }
             ComparisonItemState(
                 recipeIngredient = ingredient,
-                suggestedPantryItems = pantryItems.filter { pantryItem ->
-                    pantryItem.name.contains(ingredient.name, ignoreCase = true) ||
-                            ingredient.name.contains(pantryItem.name, ignoreCase = true)
-                }
+                suggestedPantryItems = suggestedItems,
+                needsToBeAddedToShoppingList = suggestedItems.isEmpty()
             )
         }.toMutableStateList()
     }
@@ -452,21 +454,45 @@ fun RecipePantryComparisonDialog(
                         ComparisonItemRow(
                             itemState = itemState,
                             onPantryItemSelected = { pantryItem ->
+                                val confirmedEnough = itemState.userConfirmedEnoughInPantry
+
                                 comparisonStates[index] = itemState.copy(
                                     selectedPantryItem = pantryItem,
-                                    needsToBeAddedToShoppingList = pantryItem == null,
-                                    userConfirmedEnoughInPantry = if (pantryItem != null) itemState.userConfirmedEnoughInPantry else false
+                                    // If a pantry item is selected, it's not needed for shopping list UNLESS
+                                    // userConfirmedEnoughInPantry is false (meaning they specifically need more of it)
+                                    // OR if pantryItem is null (meaning "none of these / manually needed")
+                                    needsToBeAddedToShoppingList = if (pantryItem != null) {
+                                        !confirmedEnough // If confirmedEnough is false, it means they need it
+                                    } else {
+                                        true // "none of these" always means add to shopping list
+                                    },
+                                    // userConfirmedEnoughInPantry reset if new item is selected, unless it's null
+                                    userConfirmedEnoughInPantry = if (pantryItem != null) confirmedEnough else false
                                 )
                             },
                             onConfirmEnoughInPantryChange = { isEnough ->
                                 comparisonStates[index] = itemState.copy(
                                     userConfirmedEnoughInPantry = isEnough,
-                                    needsToBeAddedToShoppingList = if (isEnough && itemState.selectedPantryItem != null) false else itemState.needsToBeAddedToShoppingList
+                                    // If an item is selected from pantry:
+                                    // - If isEnough is true, then DO NOT add to shopping list.
+                                    // - If isEnough is false, then DO add to shopping list.
+                                    // If no item is selected (selectedPantryItem is null), this checkbox doesn't directly
+                                    // control needsToBeAddedToShoppingList, which should already be true.
+                                    needsToBeAddedToShoppingList = if (itemState.selectedPantryItem != null) {
+                                        !isEnough
+                                    } else {
+                                        // If no pantry item is selected, it should generally be on the shopping list.
+                                        // This path implies the "add to shopping list" checkbox was unchecked,
+                                        // then "enough in pantry" was toggled, which is a bit of an edge case.
+                                        // Defaulting to true if no item is selected.
+                                        true
+                                    }
                                 )
                             },
                             onAddToShoppingListChange = { shouldAdd ->
                                 comparisonStates[index] = itemState.copy(
                                     needsToBeAddedToShoppingList = shouldAdd,
+                                    // If adding to shopping list, other states become less relevant or reset
                                     userConfirmedEnoughInPantry = if (shouldAdd) false else itemState.userConfirmedEnoughInPantry,
                                     selectedPantryItem = if (shouldAdd) null else itemState.selectedPantryItem
                                 )
@@ -495,8 +521,13 @@ fun RecipePantryComparisonDialog(
                     Spacer(modifier = Modifier.width(8.dp))
                     Button(onClick = {
                         val itemsToAdd = comparisonStates
-                            .filter { it.needsToBeAddedToShoppingList }
+                            .filter {
+                                // Add to shopping list if the checkbox is checked OR
+                                // if a pantry item is selected but "enough in pantry" is NOT checked.
+                                it.needsToBeAddedToShoppingList || (it.selectedPantryItem != null && !it.userConfirmedEnoughInPantry)
+                            }
                             .map { it.recipeIngredient }
+                            .distinctBy { it.name } // Ensure each ingredient is added only once
                         onConfirm(itemsToAdd)
                     }) {
                         Icon(Icons.Default.AddShoppingCart, contentDescription = null, modifier = Modifier.size(ButtonDefaults.IconSize))
@@ -522,9 +553,18 @@ fun ComparisonItemRow(
     Column {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
             Checkbox(
-                checked = itemState.needsToBeAddedToShoppingList,
+                checked = itemState.needsToBeAddedToShoppingList || (itemState.selectedPantryItem != null && !itemState.userConfirmedEnoughInPantry),
                 onCheckedChange = { isChecked ->
                     onAddToShoppingListChange(isChecked)
+                    // If unchecking, and an item was selected, we might need to imply 'enough in pantry' is true
+                    // or handle this more explicitly. For now, onAddToShoppingListChange handles the primary logic.
+                    if (!isChecked && itemState.selectedPantryItem != null) {
+                        // If the main checkbox is unchecked, and an item is selected,
+                        // it implies the user thinks they have enough of that selected item.
+                        if (!itemState.userConfirmedEnoughInPantry) {
+                            onConfirmEnoughInPantryChange(true)
+                        }
+                    }
                 }
             )
             Text(
@@ -534,7 +574,15 @@ fun ComparisonItemRow(
             )
         }
 
-        AnimatedVisibility(visible = !itemState.needsToBeAddedToShoppingList && itemState.suggestedPantryItems.isNotEmpty()) {
+        // Show dropdown and "enough in pantry" only if:
+        // 1. There are suggested pantry items
+        // AND
+        // 2. EITHER the item is NOT marked for shopping list (main checkbox is off)
+        //    OR a pantry item is already selected (even if the main checkbox is on because "not enough" is implied)
+        AnimatedVisibility(
+            visible = itemState.suggestedPantryItems.isNotEmpty() &&
+                    (!itemState.needsToBeAddedToShoppingList || itemState.selectedPantryItem != null)
+        ) {
             Column(modifier = Modifier.padding(start = 32.dp, top = 8.dp, end = 16.dp)) {
                 Text("Aus Vorrat:", style = MaterialTheme.typography.labelMedium)
                 Spacer(modifier = Modifier.height(4.dp))
@@ -549,7 +597,6 @@ fun ComparisonItemRow(
                         onValueChange = {},
                         readOnly = true,
                         trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandedPantryDropdown) },
-                        // Corrected line:
                         modifier = Modifier.menuAnchor(MenuAnchorType.PrimaryEditable, enabled = true).fillMaxWidth(),
                         textStyle = MaterialTheme.typography.bodyMedium
                     )
@@ -570,13 +617,14 @@ fun ComparisonItemRow(
                             text = { Text("Keines davon / Manuell benötigt") },
                             onClick = {
                                 onPantryItemSelected(null)
-                                onAddToShoppingListChange(true) // Ensure this logic is what you intend
+                                // onAddToShoppingListChange(true) // This is handled by onPantryItemSelected
                                 expandedPantryDropdown = false
                             }
                         )
                     }
                 }
 
+                // Show "Ausreichend vorhanden?" checkbox only if a pantry item is actually selected
                 AnimatedVisibility(visible = itemState.selectedPantryItem != null) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
@@ -593,11 +641,5 @@ fun ComparisonItemRow(
                 }
             }
         }
-        //LaunchedEffect(itemState.suggestedPantryItems, itemState.selectedPantryItem) {
-            //if (itemState.suggestedPantryItems.isEmpty() && itemState.selectedPantryItem == null && !itemState.needsToBeAddedToShoppingList) {
-                // onAddToShoppingListChange(true) // Deaktiviert für manuelle Kontrolle
-                // If you re-enable this, ensure it doesn't cause infinite recompositions or unwanted state changes.
-            //}
-        //}
     }
 }
