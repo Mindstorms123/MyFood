@@ -28,7 +28,7 @@ class MarkdownRecipeParser @Inject constructor(@ApplicationContext private val c
         }
     }
 
-    suspend fun parseRecipesFromAssets(assetSubFolder: String = "recipes_md"): List<Recipe> {
+    fun parseRecipesFromAssets(assetSubFolder: String = "recipes_md"): List<Recipe> {
         val recipes = mutableListOf<Recipe>()
         val markdownFileNames = listRecipeMarkdownFiles(assetSubFolder)
 
@@ -96,7 +96,7 @@ class MarkdownRecipeParser @Inject constructor(@ApplicationContext private val c
             return null
         }
 
-        val startIndexForContent = if (inFrontMatter && frontMatterClosed) frontMatterEndIndex + 1 else 0
+        val startIndexForContent = if (inFrontMatter) frontMatterEndIndex + 1 else 0
         if (startIndexForContent <= allLines.size) {
             contentLinesAfterFrontMatterSource = allLines.subList(startIndexForContent, allLines.size).toMutableList()
         } else {
@@ -109,7 +109,7 @@ class MarkdownRecipeParser @Inject constructor(@ApplicationContext private val c
         var recipeNameFromFrontMatter: String? = null
         val tagsList = mutableListOf<String>()
 
-        if (inFrontMatter && frontMatterClosed) {
+        if (inFrontMatter) {
             if (consumableFrontMatterLines.isEmpty() || !consumableFrontMatterLines.first().trim().startsWith("owner:", ignoreCase = true)) {
                 Log.e("StrictParser", "$originalFileName: Missing 'owner:' field in Front Matter. First FM line: '${consumableFrontMatterLines.firstOrNull()}'")
                 return null
@@ -149,7 +149,7 @@ class MarkdownRecipeParser @Inject constructor(@ApplicationContext private val c
                 consumableFrontMatterLines.removeAt(0)
             }
             Log.d("StrictParser", "$originalFileName: Tags from Front Matter: ${tagsList.joinToString()}")
-        } else if (!inFrontMatter) {
+        } else {
             Log.d("StrictParser", "$originalFileName: No Front Matter block found. Owner will be default ('$owner'), no tags from FM.")
         }
 
@@ -197,14 +197,12 @@ class MarkdownRecipeParser @Inject constructor(@ApplicationContext private val c
             return null
         }
         Log.i("StrictParser", "$originalFileName: Determined Title: '$title'. Raw title lines consumed: $titleLinesConsumed")
-
-        val linesForSectionParsing: MutableList<String>
-        if (titleLinesConsumed > 0 && contentLinesAfterFrontMatterSource.size >= titleLinesConsumed) {
-            linesForSectionParsing = contentLinesAfterFrontMatterSource.subList(titleLinesConsumed, contentLinesAfterFrontMatterSource.size).toMutableList()
+        val linesForSectionParsing: MutableList<String> = if (titleLinesConsumed > 0 && contentLinesAfterFrontMatterSource.size >= titleLinesConsumed) {
+            contentLinesAfterFrontMatterSource.subList(titleLinesConsumed, contentLinesAfterFrontMatterSource.size).toMutableList()
         } else if (titleLinesConsumed == 0 && !recipeNameFromFrontMatter.isNullOrBlank()) { // Title from FM, use all content
-            linesForSectionParsing = contentLinesAfterFrontMatterSource.toMutableList()
+            contentLinesAfterFrontMatterSource.toMutableList()
         } else { // No title lines consumed from content (e.g. title from filename because content was empty/blank) or content smaller
-            linesForSectionParsing = if (contentLinesAfterFrontMatterSource.size > titleLinesConsumed) {
+            if (contentLinesAfterFrontMatterSource.size > titleLinesConsumed) {
                 contentLinesAfterFrontMatterSource.subList(titleLinesConsumed, contentLinesAfterFrontMatterSource.size).toMutableList()
             } else {
                 mutableListOf()
@@ -244,7 +242,7 @@ class MarkdownRecipeParser @Inject constructor(@ApplicationContext private val c
                 Log.i("StrictParser", "$originalFileName: SUCCESS - Found image by convention: '$imagePathRelativeToAssetsRoot'")
                 imagePathForRecipeObject = imagePathRelativeToAssetsRoot // Speichere z.B. "pics/russischer_zupfkuchen.jpg"
                 break // Bild gefunden, Schleife verlassen
-            } catch (e: java.io.FileNotFoundException) {
+            } catch (_: java.io.FileNotFoundException) {
                 Log.d("StrictParser", "$originalFileName: FAILED - Not found by convention: '$imagePathRelativeToAssetsRoot'")
                 // Versuche die nächste Extension
             } catch (e: Exception) {
@@ -397,7 +395,6 @@ class MarkdownRecipeParser @Inject constructor(@ApplicationContext private val c
 
         var quantity: String? = null
         var unit: String? = null
-        var name: String
 
         val quantityRegex = Regex(
             """^(?:ca\.|circa|etwa|approx\.)?\s*(\d+(?:[.,]\d+)?(?:\s*-\s*\d+(?:[.,]\d+)?)?|\d+\s*/\s*\d+|\d+)\s*(.*)""",
@@ -457,7 +454,7 @@ class MarkdownRecipeParser @Inject constructor(@ApplicationContext private val c
         }
 
         // Entferne optionale Kommentare am Ende wie "(optional)" oder ", fein gehackt"
-        name = line.replace(Regex("""\s*\([^)]*\)$"""), "").trim()
+        var name: String = line.replace(Regex("""\s*\([^)]*\)$"""), "").trim()
         // Entferne abschließende Satzzeichen, die nicht Teil des Namens sind
         name = name.removeSuffix(",").removeSuffix(":").trim()
 

@@ -1,8 +1,8 @@
 package com.example.myfood.navigation // Oder com.example.myfood.ui.theme, wenn sie dort liegt
 
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.List // Für Vorrat
-import androidx.compose.material.icons.filled.RestaurantMenu // Für Rezepte
+import androidx.compose.material.icons.automirrored.filled.List
+import androidx.compose.material.icons.filled.RestaurantMenu
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.ShoppingCart
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -15,7 +15,7 @@ sealed class Screen(
     object FoodList : Screen(
         route = "foodlist",
         title = "Vorrat",
-        icon = Icons.Filled.List
+        icon = Icons.AutoMirrored.Filled.List
     )
 
     // Dieser Screen repräsentiert deine Rezeptliste
@@ -68,16 +68,7 @@ sealed class Screen(
     object EditFoodItem : Screen(
         route = "edit_food_item?foodItemId={foodItemId}",
         title = "Produkt bearbeiten/hinzufügen"
-    ) {
-        fun createRoute(foodItemId: Long? = null): String {
-            return if (foodItemId != null) {
-                "edit_food_item?foodItemId=$foodItemId"
-            } else {
-                "edit_food_item"
-            }
-        }
-        const val NAV_ARGUMENT_FOOD_ITEM_ID = "foodItemId"
-    }
+    )
 
 
     object Settings : Screen(

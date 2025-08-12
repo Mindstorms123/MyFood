@@ -26,7 +26,7 @@ object DatabaseModule {
             AppDatabase::class.java,
             "my_food_database" // Name your database file
         )
-            .fallbackToDestructiveMigration() // <<< HIER IST DIE KORREKTUR/ERGÄNZUNG
+            .fallbackToDestructiveMigration(false) // <<< HIER IST DIE KORREKTUR/ERGÄNZUNG
             .build()
     }
 
@@ -50,4 +50,5 @@ object DatabaseModule {
     fun provideRecipeDao(appDatabase: AppDatabase): RecipeDao {
         return appDatabase.recipeDao()
     }
+
 }

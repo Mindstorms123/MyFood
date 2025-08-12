@@ -96,19 +96,5 @@ class UserPreferencesRepository @Inject constructor(
         }
     }
 
-    // --- Optional: Behalte den alten Flow, falls er noch irgendwo direkt verwendet wird ---
-    // --- Ansonsten kann dieser entfernt werden, wenn alles auf notificationSettingsFlow umgestellt ist ---
-    val reminderDaysFlow: Flow<Int> = context.userSettingsDataStore.data
-        .catch { exception ->
-            if (exception is IOException) {
-                Log.e(TAG, "Error reading reminder_days_ahead preference.", exception)
-                emit(emptyPreferences())
-            } else {
-                throw exception
-            }
-        }
-        .map { preferences ->
-            preferences[PreferencesKeys.REMINDER_DAYS_AHEAD] ?: DEFAULT_REMINDER_DAYS_AHEAD
-        }
 }
 

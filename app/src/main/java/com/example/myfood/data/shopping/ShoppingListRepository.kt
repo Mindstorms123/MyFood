@@ -20,19 +20,9 @@ class ShoppingListRepository @Inject constructor(
         shoppingListDao.updateItem(item)
     }
 
-    // Diese Methode kann bleiben, falls du sie an anderer Stelle noch verwendest.
-    // Für den aktuellen ViewModel-Bedarf (Löschen via ID) wird sie nicht direkt genutzt.
-    suspend fun deleteItem(item: ShoppingListItem) {
-        shoppingListDao.deleteItem(item)
-    }
-
     // NEU: Methode zum Löschen eines Items anhand seiner ID
     suspend fun deleteItemById(itemId: Int) {
         shoppingListDao.deleteItemById(itemId) // Diese Methode muss im DAO existieren
-    }
-
-    suspend fun deleteCheckedItems() {
-        shoppingListDao.deleteCheckedItems()
     }
 
     // NEU: Methode zum Löschen einer Liste von Items

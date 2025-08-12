@@ -42,6 +42,7 @@ import java.util.*
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.collectAsState
+import androidx.core.net.toUri
 
 // Hilfsfunktion zum Erstellen einer temporären Datei für die Kamera
 fun Context.createImageFile(): File {
@@ -148,10 +149,10 @@ fun AddEditRecipeScreen(
                     try {
                         if (path.startsWith("content://")) {
                             Log.d("AddEditRecipeScreen", "Path is content URI: $path")
-                            Uri.parse(path)
+                            path.toUri()
                         } else if (path.startsWith("file://")) {
                             Log.d("AddEditRecipeScreen", "Path is file URI: $path")
-                            Uri.parse(path)
+                            path.toUri()
                         } else if (path.startsWith("/")) { // Absoluter Dateipfad
                             val file = File(path)
                             if (file.exists()) {
@@ -185,7 +186,7 @@ fun AddEditRecipeScreen(
                 }
                 Log.d("AddEditRecipeScreen", "Set currentImageUri to: $currentImageUri (from initialImagePathInRecipe: $initialImagePathInRecipe)")
                 uiIsLoading = false
-            } else if (loadedRecipe == null && (recipeId != null && recipeId != 0L && viewModel.isRecipeLoadAttempted(recipeId))) {
+            } else if (loadedRecipe == null && (isRecipeLoadAttempted())) {
                 Log.w("AddEditRecipeScreen", "Recipe with ID $recipeId was requested but not found after load attempt.")
                 uiIsLoading = false
                 coroutineScope.launch { snackbarHostState.showSnackbar("Rezept nicht gefunden.") }
@@ -241,7 +242,6 @@ fun AddEditRecipeScreen(
                     IconButton(onClick = {
                         var errorMessage: String? = null
                         val activeIngredients = ingredients.filter { it.name.isNotBlank() }
-                        val activeInstructions = instructions.filter { it.isNotBlank() }
 
                         when {
                             title.isBlank() -> errorMessage = "Titel darf nicht leer sein."
@@ -554,6 +554,6 @@ fun InstructionInputRow(
     }
 }
 
-fun RecipeViewModel.isRecipeLoadAttempted(recipeId: Long): Boolean {
+fun isRecipeLoadAttempted(): Boolean {
     return true
 }

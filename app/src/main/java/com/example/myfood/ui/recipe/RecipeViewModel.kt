@@ -11,7 +11,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -81,84 +80,8 @@ class RecipeViewModel @Inject constructor(
         }
     }
 
-    // Funktion, um ein einzelnes Rezept per ID zu holen (als StateFlow)
-    // Nützlich, wenn du reaktiv auf Änderungen eines einzelnen Rezepts hören möchtest.
-    fun getRecipeByIdFlow(id: Long): StateFlow<Recipe?> {
-        return recipeRepository.getRecipeByIdAsFlow(id)
-            .stateIn(
-                scope = viewModelScope,
-                started = SharingStarted.WhileSubscribed(5000L),
-                initialValue = null
-            )
-    }
-
-    // Suspend-Funktion für einmaligen Abruf eines Rezepts
-    // Gut für einmalige Operationen, wie das Laden vor dem Bearbeiten oder Löschen.
-    suspend fun getSingleRecipeById(id: Long): Recipe? {
-        return withContext(Dispatchers.IO) {
-            recipeRepository.getSingleRecipeById(id)
-            // Alternativ, falls getSingleRecipeById nicht existiert:
-            // recipeRepository.getRecipeByIdAsFlow(id).firstOrNull()
-        }
-    }
-
 
     // --- CRUD-Operationen (Create, Read, Update, Delete) ---
-
-    fun addRecipe(recipe: Recipe, onComplete: ((Result<Unit>) -> Unit)? = null) {
-        viewModelScope.launch {
-            try {
-                withContext(Dispatchers.IO) {
-                    recipeRepository.insertRecipe(recipe)
-                }
-                onComplete?.invoke(Result.success(Unit))
-            } catch (e: Exception) {
-                Log.e("RecipeViewModel", "Error adding recipe: ${recipe.title}", e)
-                onComplete?.invoke(Result.failure(e))
-            }
-        }
-    }
-
-    fun updateRecipe(recipe: Recipe, onComplete: ((Result<Unit>) -> Unit)? = null) {
-        viewModelScope.launch {
-            try {
-                withContext(Dispatchers.IO) {
-                    recipeRepository.updateRecipe(recipe)
-                }
-                // Optional: Den recipeDetailUiState aktualisieren, falls das bearbeitete Rezept angezeigt wird
-                if (_recipeDetailUiState.value is RecipeDetailUiState.Success &&
-                    (_recipeDetailUiState.value as RecipeDetailUiState.Success).recipe.id == recipe.id) {
-                    _recipeDetailUiState.value = RecipeDetailUiState.Success(recipe)
-                }
-                onComplete?.invoke(Result.success(Unit))
-            } catch (e: Exception) {
-                Log.e("RecipeViewModel", "Error updating recipe: ${recipe.title}", e)
-                onComplete?.invoke(Result.failure(e))
-            }
-        }
-    }
-
-    /**
-     * Löscht ein Rezept anhand seines Recipe-Objekts.
-     * Nützlich, wenn du das Objekt bereits hast.
-     */
-    fun deleteRecipe(recipe: Recipe, onDeleted: (() -> Unit)? = null) {
-        viewModelScope.launch {
-            try {
-                withContext(Dispatchers.IO) {
-                    recipeRepository.deleteRecipe(recipe)
-                }
-                onDeleted?.invoke()
-            } catch (e: Exception) {
-                Log.e("RecipeViewModel", "Error deleting recipe: ${recipe.title}", e)
-                // Setze einen Fehlerstatus, wenn das Löschen fehlschlägt und es das aktuell angezeigte Rezept ist
-                if (_recipeDetailUiState.value is RecipeDetailUiState.Success &&
-                    (_recipeDetailUiState.value as RecipeDetailUiState.Success).recipe.id == recipe.id) {
-                    _recipeDetailUiState.value = RecipeDetailUiState.Error("Fehler beim Löschen des Rezepts: ${e.message}")
-                }
-            }
-        }
-    }
 
     /**
      * NEU: Löscht ein Rezept anhand seiner ID (als String, wie von der Navigation übergeben).

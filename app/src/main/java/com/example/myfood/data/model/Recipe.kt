@@ -1,10 +1,7 @@
 package com.example.myfood.data.model // Passe den Paketnamen an
 
-import androidx.room.Embedded
 import androidx.room.Entity
 import androidx.room.PrimaryKey
-import androidx.room.Relation
-import com.example.myfood.data.model.Ingredient
 
 // Datenklasse für eine Zutat
 data class Ingredient(
@@ -29,15 +26,3 @@ data class Recipe(
     var tags: List<String>? = null // <<< NEU (für die 'tags' aus YAML, wird durch Converters behandelt)
 )
 
-// Beispiel für eine kombinierte Datenklasse, falls du Rezepte mit Zutaten direkt laden willst
-// (Alternativ kannst du Relationen in Room komplexer gestalten)
-data class RecipeWithIngredients(
-    @Embedded val recipe: Recipe,
-    // Wenn du Zutaten als eigene Tabelle hättest und eine Relation definieren würdest:
-    // @Relation(
-    //     parentColumn = "id",
-    //     entityColumn = "recipeId"
-    // )
-    // val ingredients: List<IngredientEntity>
-    // Für die einfache Variante mit TypeConverter ist dies nicht direkt nötig.
-)

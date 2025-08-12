@@ -22,10 +22,6 @@ class FoodViewModel(application: Application) : AndroidViewModel(application) {
     private val _foodItemsStateFlow = MutableStateFlow<List<FoodItem>>(emptyList())
     val foodItemsStateFlow: StateFlow<List<FoodItem>> = _foodItemsStateFlow.asStateFlow()
 
-    // Für die UI, die keinen Flow direkt konsumiert (optional, aber kann nützlich sein)
-    val foodItems: List<FoodItem>
-        get() = _foodItemsStateFlow.value
-
     private val _scannedProductForEditing = MutableStateFlow<OFFProduct?>(null)
     val scannedProductForEditing: StateFlow<OFFProduct?> = _scannedProductForEditing.asStateFlow()
 
@@ -169,12 +165,3 @@ class FoodViewModelFactory(private val application: Application) : ViewModelProv
     }
 }
 
-// Diese Extension-Funktion gehört logisch eher zur OFFProduct-Definition oder einer Utility-Datei,
-// aber kann hier bleiben, wenn es nur an dieser Stelle verwendet wird.
-fun OFFProduct.getDisplayName(): String =
-    this.productName // Bevorzuge den allgemeinen Produktnamen
-        ?: this.productNameDE // Dann Deutsch
-        ?: this.productNameEN // Dann Englisch
-        ?: this.genericName // Dann den generischen Namen
-        //?: this.name // Fallback auf ein einfaches 'name'-Feld, falls vorhanden
-        ?: "Unbekanntes Produkt" // Letzter Fallback

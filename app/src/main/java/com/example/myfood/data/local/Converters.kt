@@ -1,6 +1,5 @@
 package com.example.myfood.data.local // Passe den Paketnamen an
 
-import androidx.compose.ui.input.key.type
 import androidx.room.TypeConverter
 import com.example.myfood.data.model.Ingredient // Passe den Import an
 import com.google.gson.Gson // Einfach für Serialisierung/Deserialisierung von Listen

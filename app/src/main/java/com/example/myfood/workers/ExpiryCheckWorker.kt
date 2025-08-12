@@ -145,7 +145,7 @@ class ExpiryCheckWorker @AssistedInject constructor(
             // Generiere eine eindeutige ID für jede Benachrichtigung,
             // um zu verhindern, dass sie sich gegenseitig überschreiben, falls item.id nicht eindeutig genug wäre
             // oder um Kollisionen mit der Summary-ID zu vermeiden.
-            val notificationId = item.id.toString().hashCode() + index // Einfache Methode zur Erhöhung der Eindeutigkeit
+            val notificationId = item.id.hashCode() + index // Einfache Methode zur Erhöhung der Eindeutigkeit
 
             val intent = Intent(appContext, MainActivity::class.java).apply {
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
@@ -167,7 +167,7 @@ class ExpiryCheckWorker @AssistedInject constructor(
                 daysLeft == 1L -> appContext.getString(R.string.notification_expires_tomorrow)
                 else -> appContext.getString(R.string.notification_expires_in_days, daysLeft)
             }
-            val contentTitle = "${item.name ?: appContext.getString(R.string.notification_unnamed_product)} ${item.brand?.takeIf { it.isNotBlank() }?.let { "($it)" } ?: ""}".trim()
+            val contentTitle = "${item.name} ${item.brand?.takeIf { it.isNotBlank() }?.let { "($it)" } ?: ""}".trim()
 
             val notification = NotificationCompat.Builder(appContext, NOTIFICATION_CHANNEL_ID)
                 .setSmallIcon(R.drawable.ic_notification_icon) // ERSETZE DIES mit deinem App-Icon
@@ -180,9 +180,9 @@ class ExpiryCheckWorker @AssistedInject constructor(
                 .build()
             try {
                 notificationManager.notify(notificationId, notification)
-                Log.d(TAG, "Sent notification for ${item.name ?: "Unknown Item"}, ID: $notificationId")
+                Log.d(TAG, "Sent notification for ${item.name}, ID: $notificationId")
             } catch (e: SecurityException) {
-                Log.e(TAG, "SecurityException while sending notification for ${item.name ?: "Unknown Item"}. This might be due to background restrictions or missing POST_NOTIFICATIONS permission.", e)
+                Log.e(TAG, "SecurityException while sending notification for ${item.name}. This might be due to background restrictions or missing POST_NOTIFICATIONS permission.", e)
             }
         }
 
@@ -204,11 +204,11 @@ class ExpiryCheckWorker @AssistedInject constructor(
 
             items.take(5).forEach { item -> // Zeige Details für bis zu 5 Artikel
                 val daysLeftSummary = item.expiryDate?.let { ChronoUnit.DAYS.between(LocalDate.now(), it) }
-                val itemText = when {
-                    daysLeftSummary == null -> "${item.name ?: appContext.getString(R.string.notification_unnamed_product)} (${appContext.getString(R.string.notification_no_expiry_date_short)})"
-                    daysLeftSummary == 0L -> "${item.name ?: appContext.getString(R.string.notification_unnamed_product)} (${appContext.getString(R.string.notification_today_short)})"
-                    daysLeftSummary == 1L -> "${item.name ?: appContext.getString(R.string.notification_unnamed_product)} (${appContext.getString(R.string.notification_tomorrow_short)})"
-                    else -> "${item.name ?: appContext.getString(R.string.notification_unnamed_product)} (${appContext.getString(R.string.notification_days_short, daysLeftSummary)})"
+                val itemText = when (daysLeftSummary) {
+                    null -> "${item.name} (${appContext.getString(R.string.notification_no_expiry_date_short)})"
+                    0L -> "${item.name} (${appContext.getString(R.string.notification_today_short)})"
+                    1L -> "${item.name} (${appContext.getString(R.string.notification_tomorrow_short)})"
+                    else -> "${item.name} (${appContext.getString(R.string.notification_days_short, daysLeftSummary)})"
                 }
                 inboxStyle.addLine(itemText)
             }
@@ -237,26 +237,24 @@ class ExpiryCheckWorker @AssistedInject constructor(
     }
 
     private fun createNotificationChannel(notificationManager: NotificationManagerCompat) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            // Überprüfe, ob der Channel bereits existiert, um ihn nicht mehrmals zu erstellen
-            if (notificationManager.getNotificationChannel(NOTIFICATION_CHANNEL_ID) == null) {
-                val name = appContext.getString(R.string.notification_channel_name) // z.B. aus strings.xml: "Ablaufwarnungen"
-                val descriptionText = appContext.getString(R.string.notification_channel_description) // z.B. "Benachrichtigungen für bald ablaufende Produkte"
-                val importance = NotificationManager.IMPORTANCE_DEFAULT // Wähle die passende Wichtigkeit
-                val channel = NotificationChannel(NOTIFICATION_CHANNEL_ID, name, importance).apply {
-                    description = descriptionText
-                    // Weitere Einstellungen für den Channel sind hier möglich (z.B. Lights, Vibration)
-                    // enableLights(true)
-                    // lightColor = Color.RED
-                    // enableVibration(true)
-                    // vibrationPattern = longArrayOf(100, 200, 300, 400, 500, 400, 300, 200, 400)
-                }
-                // Registriere den Channel beim System
-                notificationManager.createNotificationChannel(channel)
-                Log.d(TAG, "Notification channel '$NOTIFICATION_CHANNEL_ID' created.")
-            } else {
-                Log.d(TAG, "Notification channel '$NOTIFICATION_CHANNEL_ID' already exists.")
+        // Überprüfe, ob der Channel bereits existiert, um ihn nicht mehrmals zu erstellen
+        if (notificationManager.getNotificationChannel(NOTIFICATION_CHANNEL_ID) == null) {
+            val name = appContext.getString(R.string.notification_channel_name) // z.B. aus strings.xml: "Ablaufwarnungen"
+            val descriptionText = appContext.getString(R.string.notification_channel_description) // z.B. "Benachrichtigungen für bald ablaufende Produkte"
+            val importance = NotificationManager.IMPORTANCE_DEFAULT // Wähle die passende Wichtigkeit
+            val channel = NotificationChannel(NOTIFICATION_CHANNEL_ID, name, importance).apply {
+                description = descriptionText
+                // Weitere Einstellungen für den Channel sind hier möglich (z.B. Lights, Vibration)
+                // enableLights(true)
+                // lightColor = Color.RED
+                // enableVibration(true)
+                // vibrationPattern = longArrayOf(100, 200, 300, 400, 500, 400, 300, 200, 400)
             }
+            // Registriere den Channel beim System
+            notificationManager.createNotificationChannel(channel)
+            Log.d(TAG, "Notification channel '$NOTIFICATION_CHANNEL_ID' created.")
+        } else {
+            Log.d(TAG, "Notification channel '$NOTIFICATION_CHANNEL_ID' already exists.")
         }
     }
 }

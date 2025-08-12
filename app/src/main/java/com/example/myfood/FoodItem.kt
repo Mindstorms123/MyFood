@@ -1,13 +1,10 @@
 package com.example.myfood
 
+// Importiere OFFProduct, wenn du es direkt in ProductResponse verwenden willst
 import androidx.room.Entity
-import kotlinx.serialization.SerialName
-import java.util.UUID // Für FoodItem ID
 import kotlinx.serialization.Serializable
 import java.time.LocalDate
-import kotlinx.serialization.Contextual
-// Importiere OFFProduct, wenn du es direkt in ProductResponse verwenden willst
-import com.example.myfood.data.openfoodfacts.OFFProduct
+import java.util.UUID
 
 /* ProductFromAPI ist jetzt auskommentiert oder gelöscht - GUT SO!
 @Serializable
@@ -32,10 +29,3 @@ data class FoodItem(
     val expiryDate: LocalDate? = null
 )
 
-@Serializable
-data class ProductResponse( // Für die Ktor-Deserialisierung in FoodScreen.kt (z.B. Barcode-Scan)
-    val status: Int,
-    @SerialName("product")
-    // ÄNDERUNG HIER: Verwende OFFProduct? anstelle von ProductFromAPI?
-    val product: OFFProduct? = null
-)

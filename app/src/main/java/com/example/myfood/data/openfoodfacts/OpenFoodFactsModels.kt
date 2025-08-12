@@ -67,8 +67,7 @@ data class OFFProduct(
                 ?.let { keyword -> // Ersten Buchstaben groß schreiben für bessere Lesbarkeit
                     keyword.replaceFirstChar { if (it.isLowerCase()) it.titlecase() else it.toString() }
                 }
-            ?: id // Als allerletzter Fallback die ID/Barcode anzeigen
-            ?: "Unbekanntes Produkt"
+            ?: id
     }
 }
 

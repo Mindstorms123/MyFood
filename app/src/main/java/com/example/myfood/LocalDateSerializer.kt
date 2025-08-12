@@ -1,5 +1,6 @@
 package com.example.myfood // Oder dein passendes package
 
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.descriptors.PrimitiveKind
 import kotlinx.serialization.descriptors.PrimitiveSerialDescriptor
@@ -15,6 +16,7 @@ object LocalDateSerializer : KSerializer<LocalDate?> { // KSerializer für Local
 
     override val descriptor: SerialDescriptor = PrimitiveSerialDescriptor("LocalDate", PrimitiveKind.STRING)
 
+    @OptIn(ExperimentalSerializationApi::class)
     override fun serialize(encoder: Encoder, value: LocalDate?) {
         if (value == null) {
             // Explizit null serialisieren, wenn der Wert null ist.
@@ -27,10 +29,11 @@ object LocalDateSerializer : KSerializer<LocalDate?> { // KSerializer für Local
         }
     }
 
+    @OptIn(ExperimentalSerializationApi::class)
     override fun deserialize(decoder: Decoder): LocalDate? {
         // Zuerst prüfen, ob der Wert explizit als null dekodiert wird.
-        if (decoder.decodeNotNullMark()) { // Gibt true zurück, wenn der Wert nicht null ist
-            return try {
+        return if (decoder.decodeNotNullMark()) { // Gibt true zurück, wenn der Wert nicht null ist
+            try {
                 LocalDate.parse(decoder.decodeString(), formatter)
             } catch (e: DateTimeParseException) {
                 // Handle den Fall, dass der String kein valides Datum im erwarteten Format ist.
@@ -41,7 +44,7 @@ object LocalDateSerializer : KSerializer<LocalDate?> { // KSerializer für Local
             }
         } else {
             // Der Wert wurde als null markiert, also null zurückgeben.
-            return null
+            null
         }
     }
 }

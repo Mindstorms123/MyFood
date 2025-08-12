@@ -31,7 +31,7 @@ class MyFoodApplication : Application(), Configuration.Provider {
             Log.d("MyFoodApplication", "MyFoodApplication.workManagerConfiguration GETTER CALLED")
             return Configuration.Builder()
                 .setWorkerFactory(workerFactory)
-                .setMinimumLoggingLevel(android.util.Log.INFO)
+                .setMinimumLoggingLevel(Log.INFO)
                 .build()
         }
 

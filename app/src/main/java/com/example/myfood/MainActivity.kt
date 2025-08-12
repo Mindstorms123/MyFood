@@ -1,5 +1,9 @@
 package com.example.myfood
 
+// --- WICHTIGE IMPORTE - BITTE PFADE ÜBERPRÜFEN UND ANPASSEN ---
+// Wenn dein Screen für das Bearbeiten von Food-Items 'EditItemScreen' heißt:
+// Wenn dein Screen 'EditFoodItemScreen' heißt (passend zu Navigation.kt):
+// import com.example.myfood.ui.EditFoodItemScreen // Alternativer Import
 import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Build
@@ -8,11 +12,15 @@ import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.annotation.RequiresApi
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.BrokenImage
-import androidx.compose.material3.*
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
@@ -22,22 +30,19 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavType
-import androidx.navigation.compose.*
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.currentBackStackEntryAsState
+import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
-import com.example.myfood.navigation.Screen // Dein Navigations-Objekt
-
-// --- WICHTIGE IMPORTE - BITTE PFADE ÜBERPRÜFEN UND ANPASSEN ---
-import com.example.myfood.FoodScreen // Pfad zu deiner FoodScreen.kt Composable
+import com.example.myfood.navigation.Screen
+import com.example.myfood.ui.EditItemScreen
 import com.example.myfood.ui.recipe.AddEditRecipeScreen
 import com.example.myfood.ui.recipe.RecipeDetailScreen
 import com.example.myfood.ui.recipe.RecipeListScreen
 import com.example.myfood.ui.recipe.RecipeViewModel
-import com.example.myfood.ui.shoppinglist.ShoppingListScreen
-// Wenn dein Screen für das Bearbeiten von Food-Items 'EditItemScreen' heißt:
-import com.example.myfood.ui.EditItemScreen // Pfad zu deiner EditItemScreen.kt Composable
-// Wenn dein Screen 'EditFoodItemScreen' heißt (passend zu Navigation.kt):
-// import com.example.myfood.ui.EditFoodItemScreen // Alternativer Import
 import com.example.myfood.ui.settings.SettingsScreen
+import com.example.myfood.ui.shoppinglist.ShoppingListScreen
 import com.example.myfood.ui.theme.MyFoodTheme
 import dagger.hilt.android.AndroidEntryPoint
 

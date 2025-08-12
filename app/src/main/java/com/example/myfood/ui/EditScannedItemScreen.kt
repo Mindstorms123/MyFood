@@ -1,28 +1,51 @@
 package com.example.myfood.ui
 
-import android.app.Application // Für Preview
-import android.os.Build
-import androidx.annotation.RequiresApi
+// Stelle sicher, dass diese Extension-Funktion entweder hier oder in FoodViewModel.kt ist,
+// oder dass deine OFFProduct-Klasse bereits eine ähnliche Methode hat.
+import android.app.Application
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.DateRange
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material3.Button
+import androidx.compose.material3.DatePicker
+import androidx.compose.material3.DatePickerDialog
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.rememberDatePickerState
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext // Für Preview
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.example.myfood.FoodItem
 import com.example.myfood.FoodViewModel
-// Stelle sicher, dass diese Extension-Funktion entweder hier oder in FoodViewModel.kt ist,
-// oder dass deine OFFProduct-Klasse bereits eine ähnliche Methode hat.
-import com.example.myfood.getDisplayName
 import com.example.myfood.data.openfoodfacts.OFFProduct
-import java.time.Instant // Import für Instant
+import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
@@ -35,7 +58,7 @@ enum class EditMode {
     NONE
 }
 
-@RequiresApi(Build.VERSION_CODES.O) // Erforderlich für java.time Klassen
+ // Erforderlich für java.time Klassen
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun EditItemScreen(
@@ -167,7 +190,7 @@ fun EditItemScreen(
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
                 // enabled bleibt so, wie es war, da es von currentMode abhängt
-                enabled = currentMode != EditMode.NONE
+                enabled = true
             )
 
             OutlinedTextField(
@@ -176,7 +199,7 @@ fun EditItemScreen(
                 label = { Text("Marke (optional)") },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
-                enabled = currentMode != EditMode.NONE
+                enabled = true
             )
 
             OutlinedTextField(
@@ -188,7 +211,7 @@ fun EditItemScreen(
                 modifier = Modifier.fillMaxWidth(),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 singleLine = true,
-                enabled = currentMode != EditMode.NONE
+                enabled = true
             )
 
             OutlinedTextField(
@@ -197,19 +220,19 @@ fun EditItemScreen(
                 label = { Text("Mindesthaltbarkeitsdatum") },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clickable(enabled = currentMode != EditMode.NONE) {
-                        if (currentMode != EditMode.NONE) showDatePickerDialog.value = true
+                    .clickable(enabled = true) {
+                        showDatePickerDialog.value = true
                     },
                 readOnly = true,
                 trailingIcon = {
                     IconButton(
                         onClick = { showDatePickerDialog.value = true },
-                        enabled = currentMode != EditMode.NONE
+                        enabled = true
                     ) {
                         Icon(Icons.Filled.DateRange, contentDescription = "Kalender öffnen")
                     }
                 },
-                enabled = currentMode != EditMode.NONE
+                enabled = true
             )
 
             Spacer(Modifier.weight(1f))
@@ -249,7 +272,7 @@ fun EditItemScreen(
                     }
                 },
                 modifier = Modifier.fillMaxWidth(),
-                enabled = name.isNotBlank() && currentMode != EditMode.NONE
+                enabled = name.isNotBlank()
             ) {
                 Text(
                     if (currentMode == EditMode.EXISTING_ITEM) "Änderungen speichern"
@@ -265,7 +288,6 @@ fun EditItemScreen(
 // Die Previews sollten weiterhin funktionieren, da sie das ViewModel und seine Methoden
 // direkt aufrufen, um die benötigten Zustände zu setzen.
 
-@RequiresApi(Build.VERSION_CODES.O)
 @Preview(showBackground = true, name = "Edit Existing Item Preview")
 @Composable
 fun PreviewEditExistingItemScreen() {
@@ -294,7 +316,6 @@ fun PreviewEditExistingItemScreen() {
     }
 }
 
-@RequiresApi(Build.VERSION_CODES.O)
 @Preview(showBackground = true, name = "Edit New Scanned Item Preview")
 @Composable
 fun PreviewEditNewScannedItemScreen() {
@@ -317,7 +338,6 @@ fun PreviewEditNewScannedItemScreen() {
     }
 }
 
-@RequiresApi(Build.VERSION_CODES.O)
 @Preview(showBackground = true, name = "Edit Screen in NONE mode")
 @Composable
 fun PreviewEditNoneModeScreen() {

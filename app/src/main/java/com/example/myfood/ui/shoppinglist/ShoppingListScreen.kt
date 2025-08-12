@@ -23,6 +23,7 @@ import coil.compose.AsyncImage
 import com.example.myfood.data.openfoodfacts.OFFProduct
 import com.example.myfood.data.shopping.ShoppingListItem
 import android.util.Log
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 
@@ -103,7 +104,7 @@ fun ShoppingListScreen(
                         )
                     }
                 }
-            } else if (uiState.searchQuery.length > 2 && uiState.searchResults.isEmpty() && !uiState.isLoadingSearch && uiState.errorSearching == null) {
+            } else if (uiState.searchQuery.length > 2 && uiState.errorSearching == null) {
                 Text("Keine Produkte für '${uiState.searchQuery}' gefunden.", modifier = Modifier.padding(16.dp))
             } else if (uiState.errorSearching != null) {
                 Text("Fehler bei der Suche: ${uiState.errorSearching}", color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(16.dp))
@@ -126,7 +127,11 @@ fun ShoppingListScreen(
                                 onEditClick = { viewModel.onShowAddItemDialogChanged(true, item) },
                                 onDeleteClick = { viewModel.deleteItem(item.id) }
                             )
-                            Divider()
+                            HorizontalDivider(
+                                Modifier,
+                                DividerDefaults.Thickness,
+                                DividerDefaults.color
+                            )
                         }
                     }
                 }

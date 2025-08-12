@@ -10,10 +10,12 @@ import androidx.compose.ui.platform.LocalContext // <<< HINZUGEFÜGT
 import androidx.compose.ui.unit.dp
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material3.BasicAlertDialog
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 // Unnötige explizite Imports für getValue/setValue entfernt, wenn sie nicht direkt genutzt werden
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.window.DialogProperties
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.myfood.R // <<< HINZUGEFÜGT (für Zugriff auf R.plurals)
 import com.example.myfood.datastore.NotificationSettings
@@ -60,41 +62,41 @@ fun SettingsScreen(
 
     // --- TimePickerDialog bleibt unverändert ---
     if (showTimePickerDialog) {
-        AlertDialog(
-            onDismissRequest = { showTimePickerDialog = false }
-        ) {
-            Surface(
-                modifier = Modifier
-                    .wrapContentWidth()
-                    .wrapContentHeight(),
-                shape = MaterialTheme.shapes.large
-            ) {
-                Column(
-                    modifier = Modifier.padding(16.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
+        BasicAlertDialog(
+            onDismissRequest = { showTimePickerDialog = false },
+            properties = DialogProperties(), content = {
+                Surface(
+                    modifier = Modifier
+                        .wrapContentWidth()
+                        .wrapContentHeight(),
+                    shape = MaterialTheme.shapes.large
                 ) {
-                    Text("Benachrichtigungszeit wählen", style = MaterialTheme.typography.titleMedium)
-                    Spacer(modifier = Modifier.height(16.dp))
-                    TimePicker(state = timePickerState)
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.End
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        TextButton(onClick = { showTimePickerDialog = false }) {
-                            Text("Abbrechen")
-                        }
-                        Spacer(modifier = Modifier.width(8.dp))
-                        TextButton(onClick = {
-                            viewModel.updateNotificationTime(timePickerState.hour, timePickerState.minute)
-                            showTimePickerDialog = false
-                        }) {
-                            Text("OK")
+                        Text("Benachrichtigungszeit wählen", style = MaterialTheme.typography.titleMedium)
+                        Spacer(modifier = Modifier.height(16.dp))
+                        TimePicker(state = timePickerState)
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.End
+                        ) {
+                            TextButton(onClick = { showTimePickerDialog = false }) {
+                                Text("Abbrechen")
+                            }
+                            Spacer(modifier = Modifier.width(8.dp))
+                            TextButton(onClick = {
+                                viewModel.updateNotificationTime(timePickerState.hour, timePickerState.minute)
+                                showTimePickerDialog = false
+                            }) {
+                                Text("OK")
+                            }
                         }
                     }
                 }
-            }
-        }
+            })
     }
 
     Column(
@@ -155,7 +157,6 @@ fun SettingsScreenPreview() {
     MyFoodTheme {
         val dummySettings = remember { NotificationSettings(leadTimeDays = 3, notificationHour = 10, notificationMinute = 30) }
         var sliderPos by remember(dummySettings.leadTimeDays) { mutableFloatStateOf(dummySettings.leadTimeDays.toFloat()) }
-        val context = LocalContext.current // Für die Preview ebenfalls notwendig
 
         Column(
             modifier = Modifier

@@ -13,21 +13,21 @@ val Context.dataStore by preferencesDataStore(name = "food_store_v2") // Neuer N
 
 object FoodStore {
     // Neuer Key-Name, da sich die Datenstruktur ändert (von List<String> zu List<FoodItem>)
-    public val FOOD_ITEM_LIST_KEY = stringPreferencesKey("food_item_objects_list")
+    val FOOD_ITEM_LIST_KEY = stringPreferencesKey("food_item_objects_list")
 
     // Gibt jetzt Flow<List<FoodItem>> zurück
     fun getFoodList(context: Context): Flow<List<FoodItem>> {
         return context.dataStore.data.map { preferences ->
             val jsonString = preferences[FOOD_ITEM_LIST_KEY]
             if (jsonString.isNullOrEmpty()) {
-                emptyList<FoodItem>() // Wichtig: Typisierte leere Liste
+                emptyList() // Wichtig: Typisierte leere Liste
             } else {
                 try {
                     Json.decodeFromString<List<FoodItem>>(jsonString)
                 } catch (e: Exception) {
                     e.printStackTrace()
                     println("Error decoding food item list: ${e.message}")
-                    emptyList<FoodItem>() // Fallback bei Fehler
+                    emptyList() // Fallback bei Fehler
                 }
             }
         }
