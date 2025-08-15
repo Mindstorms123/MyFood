@@ -22,10 +22,10 @@ class RecipeRepository @Inject constructor(
 
     // --- KORREKTUR/ANPASSUNG: Umbenannt für Klarheit, wenn eine suspend-Version existiert ---
     // Diese Methode gibt einen Flow zurück, für kontinuierliche Beobachtung.
-    fun getRecipeByIdAsFlow(id: Long): Flow<Recipe?> {
+    /*fun getRecipeByIdAsFlow(id: Long): Flow<Recipe?> {
         // Annahme: recipeDao.getRecipeByIdAsFlow(id) ist die DAO-Methode, die Flow<Recipe?> zurückgibt
         return recipeDao.getRecipeByIdAsFlow(id)
-    }
+    }*/
 
     // --- KORREKTUR/ANPASSUNG: Suspend-Funktion für einmaligen Abruf eines Rezepts ohne Transformationen ---
     // Diese Methode gibt ein einzelnes Rezept direkt zurück.

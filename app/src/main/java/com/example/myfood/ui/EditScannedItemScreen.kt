@@ -59,6 +59,7 @@ enum class EditMode {
 }
 
  // Erforderlich für java.time Klassen
+@Suppress("KotlinConstantConditions")
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun EditItemScreen(

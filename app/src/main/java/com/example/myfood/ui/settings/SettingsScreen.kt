@@ -1,5 +1,6 @@
 package com.example.myfood.ui.settings
 
+import android.annotation.SuppressLint
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -40,6 +41,7 @@ fun rememberTimePickerState(
     }
 }
 
+@SuppressLint("LocalContextResourcesRead")
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(

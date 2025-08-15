@@ -45,7 +45,7 @@ class UserPreferencesRepository @Inject constructor(
         val NOTIFICATION_TIME_MINUTE = intPreferencesKey("notification_time_minute")
     }
 
-    private val TAG: String = "UserPreferencesRepo"
+    private val tag: String = "UserPreferencesRepo"
 
     // Standardwerte für die Einstellungen
     companion object {
@@ -59,7 +59,7 @@ class UserPreferencesRepository @Inject constructor(
         .catch { exception ->
             // Fehlerbehandlung beim Lesen der Preferences
             if (exception is IOException) {
-                Log.e(TAG, "Error reading user preferences.", exception)
+                Log.e(tag, "Error reading user preferences.", exception)
                 // Bei Fehler ein NotificationSettings-Objekt mit Standardwerten ausgeben
                 emit(
                     // Hier direkt ein leeres Preferences-Objekt übergeben,
@@ -83,7 +83,7 @@ class UserPreferencesRepository @Inject constructor(
     suspend fun updateReminderDays(days: Int) {
         context.userSettingsDataStore.edit { preferences ->
             preferences[PreferencesKeys.REMINDER_DAYS_AHEAD] = days
-            Log.d(TAG, "Reminder days preference updated to: $days")
+            Log.d(tag, "Reminder days preference updated to: $days")
         }
     }
 
@@ -92,7 +92,7 @@ class UserPreferencesRepository @Inject constructor(
         context.userSettingsDataStore.edit { preferences ->
             preferences[PreferencesKeys.NOTIFICATION_TIME_HOUR] = hour
             preferences[PreferencesKeys.NOTIFICATION_TIME_MINUTE] = minute
-            Log.d(TAG, "Notification time preference updated to: $hour:$minute")
+            Log.d(tag, "Notification time preference updated to: $hour:$minute")
         }
     }
 
