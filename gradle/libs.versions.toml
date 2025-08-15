@@ -1,21 +1,21 @@
 
 [versions]
 agp = "8.12.0"
-kotlin = "2.1.21" # Dies ist die Kotlin-Version deines Projekts
+kotlin = "2.2.10" # Dies ist die Kotlin-Version deines Projekts
 # KSP Version muss zu deiner Kotlin-Version passen.
 # Für Kotlin 2.0.21 ist eine passende KSP-Version z.B. "2.0.21-1.0.18" (bitte prüfen!)
-ksp = "2.1.21-1.0.18" # Ersetze dies mit der korrekten KSP-Version für Kotlin 2.0.21
-hilt = "2.51.1"        # Oder die aktuellste Hilt-Version (z.B. 2.51.1)
-coreKtx = "1.16.0"
+ksp = "2.2.10-2.0.2" # Ersetze dies mit der korrekten KSP-Version für Kotlin 2.0.21
+hilt = "2.57"        # Oder die aktuellste Hilt-Version (z.B. 2.51.1)
+coreKtx = "1.17.0"
 junit = "4.13.2"
-junitVersion = "1.2.1"
-espressoCore = "3.6.1"
+junitVersion = "1.3.0"
+espressoCore = "3.7.0"
 appcompat = "1.7.1"
 material = "1.12.0"
 room = "2.7.2"
 hiltNavigationCompose = "1.2.0"
 # Compose
-composeBom = "2025.06.01" # Deine Compose BOM Version
+composeBom = "2025.08.00" # Deine Compose BOM Version
 # Deine Kotlin Compiler Extension Version sollte zu deiner Kotlin Version und Compose BOM passen
 # Für Kotlin 2.0.21 und Compose BOM 2024.05.00, ist die Compose Compiler Version typischerweise 1.5.13 oder höher.
 # Bitte die Compose-Kotlin Kompatibilitätsmatrix prüfen.
@@ -23,10 +23,10 @@ composeBom = "2025.06.01" # Deine Compose BOM Version
 # kotlinCompilerExtension = "1.5.13" # Füge dies hinzu, wenn du es hier zentral verwalten willst
 
 # Kotlinx Serialization
-kotlinxSerializationJson = "1.7.1"
+kotlinxSerializationJson = "1.9.0"
 
 # Ktor
-ktor = "2.3.9" # oder eine aktuellere Version
+ktor = "3.2.3" # oder eine aktuellere Version
 
 # CameraX
 camerax = "1.4.2"
@@ -35,10 +35,10 @@ camerax = "1.4.2"
 mlkitBarcodeScanning = "17.3.0"
 
 # Coil
-coil = "2.6.0"
+coil = "2.7.0"
 
 # Navigation Compose
-navigationCompose = "2.9.0"
+navigationCompose = "2.9.3"
 
 
 [libraries]
@@ -66,8 +66,8 @@ androidx-compose-ui-tooling-preview = { group = "androidx.compose.ui", name = "u
 androidx-compose-ui-tooling = { group = "androidx.compose.ui", name = "ui-tooling" }
 androidx-compose-material3 = { group = "androidx.compose.material3", name = "material3" }
 androidx-compose-material = { group = "androidx.compose.material", name = "material" } # Für Material 2 Komponenten
-androidx-activity-compose = { module = "androidx.activity:activity-compose", version = "1.9.0" } # Beispiel für aktuellere Version
-androidx-lifecycle-viewmodel-compose = { module = "androidx.lifecycle:lifecycle-viewmodel-compose", version = "2.8.2" } # Beispiel für aktuellere Version
+androidx-activity-compose = { module = "androidx.activity:activity-compose", version = "1.10.1" } # Beispiel für aktuellere Version
+androidx-lifecycle-viewmodel-compose = { module = "androidx.lifecycle:lifecycle-viewmodel-compose", version = "2.9.2" } # Beispiel für aktuellere Version
 
 # Kotlinx Serialization
 kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "kotlinxSerializationJson"}
