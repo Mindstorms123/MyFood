@@ -32,7 +32,7 @@ val Context.userSettingsDataStore: DataStore<Preferences> by preferencesDataStor
 
 @Singleton // Wichtig für Hilt, stellt sicher, dass es nur eine Instanz gibt
 class UserPreferencesRepository @Inject constructor(
-    @ApplicationContext private val context: Context // Hilt injiziert den ApplicationContext
+    @param:ApplicationContext private val context: Context // Hilt injiziert den ApplicationContext
 ) {
 
     // Die Schlüssel für die Preferences an einem Ort zusammenfassen
